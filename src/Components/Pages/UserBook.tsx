@@ -127,14 +127,6 @@ function UserBook() {
               Proceed
             </button>
           </div>
-          <div className="card bg-white shadow-md p-4">
-            <h2 className="text-sm text-black mb-2">Book</h2>
-            <p className="mb-4 text-black text-2xl font-bold">IMC/AVR</p>
-          </div>
-          <div className="card bg-white shadow-md p-4">
-            <h2 className="text-sm text-black mb-2">Book</h2>
-            <p className="mb-4 text-black text-2xl font-bold">Reschedule</p>
-          </div>
         </section>
       </main>
     </div>

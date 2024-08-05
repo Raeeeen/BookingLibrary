@@ -3,6 +3,7 @@ import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
+import reschedule from "../../assets/rescheduling.png";
 import reportslogo from "../../assets/reportslogo.png";
 import { useNavigate } from "react-router-dom";
 import { initializeApp } from "firebase/app";
@@ -89,7 +90,13 @@ function Dashboard() {
           const bookingsWithDetails = bookingsList.map((booking) => ({
             ...booking,
             borrowedByName: users[booking.borrowedBy]?.name || "Unknown",
-            students: booking.studentsSelected?.join(", ") || "None",
+            students: booking.studentsSelected
+              ? booking.studentsSelected
+                  .map(
+                    (studentId: string) => users[studentId]?.name || "Unknown"
+                  )
+                  .join(", ")
+              : "None",
           }));
 
           setPendingBookings(bookingsWithDetails);
@@ -219,11 +226,20 @@ function Dashboard() {
             </li>
             <li className="mb-4">
               <a
-                href="/Reports"
+                href="/reports"
                 className="flex items-center p-2 hover:bg-gray-300 rounded-md"
               >
                 <img src={reportslogo} alt="Reports" className="h-6 w-6" />
                 <span className="ml-2 text-black font-bold">Reports</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="#"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={reschedule} alt="Reports" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Reschedule</span>
               </a>
             </li>
           </ul>
@@ -262,14 +278,6 @@ function Dashboard() {
             <button className="btn text-white font-bold mt-2 w-1/2">
               Proceed
             </button>
-          </div>
-          <div className="card bg-white shadow-md p-4">
-            <h2 className="text-sm text-black mb-2">Book</h2>
-            <p className="mb-4 text-black text-2xl font-bold">IMC/AVR</p>
-          </div>
-          <div className="card bg-white shadow-md p-4">
-            <h2 className="text-sm text-black mb-2">Book</h2>
-            <p className="mb-4 text-black text-2xl font-bold">Reschedule</p>
           </div>
         </section>
         <section>

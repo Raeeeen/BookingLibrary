@@ -9,6 +9,8 @@ import Reports from "./Components/Pages/Reports";
 import UserBook from "./Components/Pages/UserBook";
 import UserAvailableRoom from "./Components/Pages/UserAvailableRoom";
 import UserBookRoom from "./Components/Pages/UserBookRoom";
+import ImcAvr from "./Components/Pages/imcAvr";
+import UserImcAvr from "./Components/Pages/UserImcAvr";
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
         <Route path="/UserBook" element={<UserBook />} />
         <Route path="/UserAvailableRoom" element={<UserAvailableRoom />} />
         <Route path="/UserBookRoom" element={<UserBookRoom />} />
+        <Route path="/ImcAvr" element={<ImcAvr />} />
+        <Route path="/UserImcAvr" element={<UserImcAvr />} />
 
         <Route path="/" element={<SignIn />} />
       </Routes>

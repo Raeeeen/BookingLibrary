@@ -67,7 +67,12 @@ const UserAvailableRoom: React.FC = () => {
   }, [db]);
 
   const handleBookClick = (roomTitle: string) => {
-    navigate("/UserBookRoom", { state: { roomTitle } });
+    // Use a regular expression to match "IMC/AVR" regardless of slashes
+    if (/IMC\/?AVR/.test(roomTitle)) {
+      navigate("/UserImcAvr", { state: { roomTitle } });
+    } else {
+      navigate("/UserBookRoom", { state: { roomTitle } });
+    }
   };
 
   // Update the RoomCard component to use the defined types

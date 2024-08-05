@@ -11,6 +11,7 @@ import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
+import reschedule from "../../assets/rescheduling.png";
 import reportslogo from "../../assets/reportslogo.png";
 import { FirebaseApp, initializeApp } from "firebase/app";
 import { ToastContainer, toast } from "react-toastify";
@@ -28,14 +29,13 @@ const BookRoom: React.FC = () => {
   const roomTitle = location.state?.roomTitle || "Unknown Room";
   const [date, setDate] = useState<Date | null>(null);
 
-  const [students, setStudents] = useState<string[]>([]);
-  const [studentName, setStudentName] = useState<string>("");
+  const [, setStudents] = useState<string[]>([]);
+
+  const [, setStudentName] = useState<string>("");
   const [roomId] = useState(generateRandomRoomId());
   const [bookedSlots, setBookedSlots] = useState<{ start: Date; end: Date }[]>(
     []
   );
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [showUserSelection, setShowUserSelection] = useState(false);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
   const [department, setDepartment] = useState<string>("");
@@ -51,6 +51,10 @@ const BookRoom: React.FC = () => {
     minutes: "00",
     amPm: "AM",
   });
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
+  const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
 
@@ -111,21 +115,6 @@ const BookRoom: React.FC = () => {
     fetchBookedSlots();
   }, [db, roomTitle]);
 
-  const handleStudentNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStudentName(e.target.value);
-  };
-
-  const handleAddStudent = () => {
-    if (studentName.trim() !== "") {
-      setStudents((prevStudents) => [...prevStudents, studentName.trim()]);
-      setStudentName("");
-    }
-  };
-
-  const handleRemoveStudent = (index: number) => {
-    setStudents((prevStudents) => prevStudents.filter((_, i) => i !== index));
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -135,7 +124,12 @@ const BookRoom: React.FC = () => {
     }
 
     if (selectedUsers.length === 0) {
-      toast.error("Please select at least one user.");
+      toast.error("Please select at least one students.");
+      return;
+    }
+
+    if (selectedStudents.length === 0) {
+      toast.error("Please select at least one students.");
       return;
     }
 
@@ -257,7 +251,7 @@ const BookRoom: React.FC = () => {
     const bookingData = {
       roomName: roomTitle,
       roomId: roomId,
-      studentsSelected: students,
+      studentsSelected: selectedStudents,
       date: formattedDate,
       startTime: `${startHours24.toString().padStart(2, "0")}:${startMinutes24
         .toString()
@@ -327,10 +321,20 @@ const BookRoom: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => setEndTime({ ...endTime, [e.target.name]: e.target.value });
 
-  const handleSelectUsers = (selected: string[]) => {
+  // Functions to handle user selection
+  const handleSelectBorrowedBy = (selected: string[]) => {
     setSelectedUsers(selected);
-    setShowUserSelection(false); // Close the user selection modal
+    setShowBorrowedBySelection(false);
   };
+
+  const handleSelectStudents = (selected: string[]) => {
+    setSelectedStudents(selected);
+    setShowStudentsSelection(false);
+  };
+
+  // Handle show modals
+  const openBorrowedByModal = () => setShowBorrowedBySelection(true);
+  const openStudentsModal = () => setShowStudentsSelection(true);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -382,6 +386,15 @@ const BookRoom: React.FC = () => {
               >
                 <img src={reportslogo} alt="Reports" className="h-6 w-6" />
                 <span className="ml-2 text-black font-bold">Reports</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="#"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={reschedule} alt="Reports" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Reschedule</span>
               </a>
             </li>
           </ul>
@@ -472,19 +485,20 @@ const BookRoom: React.FC = () => {
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                 />
               </div>
+
               <div className="mb-4">
                 <label
                   className="block text-black text-sm font-bold mb-2 mt-2"
-                  htmlFor="students"
+                  htmlFor="borrowed-by"
                 >
-                  Borrowed By:
+                  Booked By:
                 </label>
                 <button
                   type="button"
-                  onClick={() => setShowUserSelection(true)}
+                  onClick={openBorrowedByModal}
                   className="p-2 bg-black text-white rounded"
                 >
-                  Select Users
+                  Select Students
                 </button>
                 {selectedUsers.length > 0 && (
                   <ul className="mt-3">
@@ -501,44 +515,30 @@ const BookRoom: React.FC = () => {
               </div>
               <div className="mb-4">
                 <label
-                  className="block text-black text-sm font-bold mb-2"
+                  className="block text-black text-sm font-bold mb-2 mt-2"
                   htmlFor="students"
                 >
-                  Add Students
+                  Add Students:
                 </label>
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    value={studentName}
-                    onChange={handleStudentNameChange}
-                    className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddStudent}
-                    className="ml-2 bg-black hover:bg-blue-400 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                  >
-                    Add
-                  </button>
-                </div>
-
-                <ul className="mt-2">
-                  {students.map((student, index) => (
-                    <li
-                      key={index}
-                      className="flex justify-between items-center text-black"
-                    >
-                      {student}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveStudent(index)}
-                        className="ml-2 bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline mt-2"
+                <button
+                  type="button"
+                  onClick={openStudentsModal}
+                  className="p-2 bg-black text-white rounded"
+                >
+                  Select Students
+                </button>
+                {selectedStudents.length > 0 && (
+                  <ul className="mt-3">
+                    {selectedStudents.map((student, index) => (
+                      <li
+                        key={index}
+                        className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                       >
-                        Remove
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        {users.find((u) => u.id === student)?.name || student}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="mb-4">
@@ -652,16 +652,28 @@ const BookRoom: React.FC = () => {
           </div>
         </div>
       </main>
-      {showUserSelection && (
+      {/* User selection modals */}
+      {showBorrowedBySelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <UserSelection
             users={users}
             selectedUsers={selectedUsers}
-            onSelect={handleSelectUsers}
-            onCancel={() => setShowUserSelection(false)}
+            onSelect={handleSelectBorrowedBy}
+            onCancel={() => setShowBorrowedBySelection(false)}
           />
         </div>
       )}
+      {showStudentsSelection && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <UserSelection
+            users={users}
+            selectedUsers={selectedStudents}
+            onSelect={handleSelectStudents}
+            onCancel={() => setShowStudentsSelection(false)}
+          />
+        </div>
+      )}
+
       <ToastContainer />
     </div>
   );

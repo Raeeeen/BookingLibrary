@@ -19,6 +19,7 @@ import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
 import reportslogo from "../../assets/reportslogo.png";
+import reschedule from "../../assets/rescheduling.png";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Lottie from "lottie-react";
@@ -278,6 +279,15 @@ function Rooms() {
               >
                 <img src={reportslogo} alt="Reports" className="h-6 w-6" />
                 <span className="ml-2 text-black font-bold">Reports</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="#"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={reschedule} alt="Reports" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Reschedule</span>
               </a>
             </li>
           </ul>

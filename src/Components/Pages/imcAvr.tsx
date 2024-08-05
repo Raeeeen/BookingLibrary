@@ -9,30 +9,33 @@ import {
 } from "firebase/database";
 import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
+import roomslogo from "../../assets/roomslogo.png";
+import equipmentslogo from "../../assets/equipmentslogo.png";
+import reschedule from "../../assets/rescheduling.png";
+import reportslogo from "../../assets/reportslogo.png";
 import { FirebaseApp, initializeApp } from "firebase/app";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import UserSelection from "./UserSelection";
-import { getAuth } from "firebase/auth";
 
 const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
 };
 
-const UserBookRoom: React.FC = () => {
+const BookRoom: React.FC = () => {
   const location = useLocation();
   const roomTitle = location.state?.roomTitle || "Unknown Room";
   const [date, setDate] = useState<Date | null>(null);
 
   const [, setStudents] = useState<string[]>([]);
+
   const [, setStudentName] = useState<string>("");
   const [roomId] = useState(generateRandomRoomId());
   const [bookedSlots, setBookedSlots] = useState<{ start: Date; end: Date }[]>(
     []
   );
-  const [showUserSelection, setShowUserSelection] = useState(false);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
   const [department, setDepartment] = useState<string>("");
@@ -50,9 +53,9 @@ const UserBookRoom: React.FC = () => {
   });
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
   const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const handleDateChange = (date: any) => setDate(date);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Firebase configuration
@@ -69,16 +72,6 @@ const UserBookRoom: React.FC = () => {
   // Initialize Firebase
   const app: FirebaseApp = initializeApp(firebaseConfig);
   const db: Database = getDatabase(app);
-  const auth = getAuth(app);
-
-  useEffect(() => {
-    // Fetch the current logged-in user ID
-    const user = auth.currentUser;
-    if (user) {
-      setCurrentUserId(user.uid);
-      setSelectedUsers([user.uid]); // Set the current user as the selected user
-    }
-  }, [auth]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -273,16 +266,16 @@ const UserBookRoom: React.FC = () => {
       subject: subject,
     };
 
-    // Reference to the pendingbookings node
-    const bookingRef = dbRef(db, `pendingbookings/${roomId}`); // Change this to 'pendingbookings'
+    // Reference to the bookrooms node
+    const bookingRef = dbRef(db, `bookrooms/${roomId}`);
 
     try {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
 
-      toast.success("Waiting for the Admin confirmation!");
+      toast.success("Room booked successfully!");
       setTimeout(() => {
-        navigate("/UserBook");
+        navigate("/Dashboard");
       }, 2000);
 
       // Clear form fields after successful submission
@@ -328,9 +321,10 @@ const UserBookRoom: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => setEndTime({ ...endTime, [e.target.name]: e.target.value });
 
-  const handleSelectUsers = (selected: string[]) => {
+  // Functions to handle user selection
+  const handleSelectBorrowedBy = (selected: string[]) => {
     setSelectedUsers(selected);
-    setShowUserSelection(false); // Close the user selection modal
+    setShowBorrowedBySelection(false);
   };
 
   const handleSelectStudents = (selected: string[]) => {
@@ -338,6 +332,8 @@ const UserBookRoom: React.FC = () => {
     setShowStudentsSelection(false);
   };
 
+  // Handle show modals
+  const openBorrowedByModal = () => setShowBorrowedBySelection(true);
   const openStudentsModal = () => setShowStudentsSelection(true);
 
   return (
@@ -352,13 +348,53 @@ const UserBookRoom: React.FC = () => {
         </div>
         <nav>
           <ul>
-            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+            <li className="mb-4">
               <a
-                href="/UserBook"
+                href="/Dashboard"
                 className="flex items-center p-2 hover:bg-gray-200 rounded-md"
               >
                 <img src={dashboardlogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">BOOK ROOM</span>
+                <span className="ml-2 text-black font-bold">Dashboard</span>
+              </a>
+            </li>
+            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+              <a
+                href="/Rooms"
+                className="flex items-center p-2 hover:bg-gray-200 rounded-md"
+              >
+                <img src={roomslogo} alt="Rooms" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Rooms</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="#"
+                className="flex items-center p-2 hover:bg-gray-200 rounded-md"
+              >
+                <img
+                  src={equipmentslogo}
+                  alt="Equipments"
+                  className="h-6 w-6"
+                />
+                <span className="ml-2 text-black font-bold">Equipments</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="/Reports"
+                className="flex items-center p-2 hover:bg-gray-200 rounded-md"
+              >
+                <img src={reportslogo} alt="Reports" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Reports</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="#"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={reschedule} alt="Reports" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Reschedule</span>
               </a>
             </li>
           </ul>
@@ -449,16 +485,17 @@ const UserBookRoom: React.FC = () => {
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                 />
               </div>
+
               <div className="mb-4">
                 <label
                   className="block text-black text-sm font-bold mb-2 mt-2"
-                  htmlFor="students"
+                  htmlFor="borrowed-by"
                 >
                   Booked By:
                 </label>
                 <button
                   type="button"
-                  onClick={() => setShowUserSelection(true)}
+                  onClick={openBorrowedByModal}
                   className="p-2 bg-black text-white rounded"
                 >
                   Select Students
@@ -481,14 +518,14 @@ const UserBookRoom: React.FC = () => {
                   className="block text-black text-sm font-bold mb-2 mt-2"
                   htmlFor="students"
                 >
-                  Add Students:
+                  Add Equipments:
                 </label>
                 <button
                   type="button"
                   onClick={openStudentsModal}
                   className="p-2 bg-black text-white rounded"
                 >
-                  Select Students
+                  Select Equipments
                 </button>
                 {selectedStudents.length > 0 && (
                   <ul className="mt-3">
@@ -615,13 +652,14 @@ const UserBookRoom: React.FC = () => {
           </div>
         </div>
       </main>
-      {showUserSelection && (
+      {/* User selection modals */}
+      {showBorrowedBySelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <UserSelection
-            users={[users.find((user) => user.id === currentUserId)!]} // Pass only the current user
+            users={users}
             selectedUsers={selectedUsers}
-            onSelect={handleSelectUsers}
-            onCancel={() => setShowUserSelection(false)}
+            onSelect={handleSelectBorrowedBy}
+            onCancel={() => setShowBorrowedBySelection(false)}
           />
         </div>
       )}
@@ -635,9 +673,10 @@ const UserBookRoom: React.FC = () => {
           />
         </div>
       )}
+
       <ToastContainer />
     </div>
   );
 };
 
-export default UserBookRoom;
+export default BookRoom;

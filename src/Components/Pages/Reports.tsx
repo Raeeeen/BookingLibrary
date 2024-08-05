@@ -4,16 +4,17 @@ import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
+import reschedule from "../../assets/rescheduling.png";
 import reportslogo from "../../assets/reportslogo.png";
 import { initializeApp } from "firebase/app";
 import Lottie from "lottie-react";
-import loadingAnimation from "../../assets/loadinganimation2.json"; // Path to your Lottie JSON file
+import loadingAnimation from "../../assets/loadinganimation2.json";
 
 interface User {
   id: string;
   name: string;
   email: string;
-  photoURL?: string; // Optional photoURL field
+  photoURL?: string;
 }
 
 interface Booking {
@@ -23,7 +24,7 @@ interface Booking {
   date: string;
   startTime: string;
   endTime: string;
-  borrowedBy: string; // Added field for the user who borrowed
+  borrowedBy: string;
 }
 
 const Reports: React.FC = () => {
@@ -34,7 +35,6 @@ const Reports: React.FC = () => {
     [key: string]: Booking;
   }>({});
 
-  // Firebase configuration
   const firebaseConfig = {
     apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
     authDomain: "library-7feb9.firebaseapp.com",
@@ -45,12 +45,10 @@ const Reports: React.FC = () => {
     appId: "1:977659880455:web:f1c2a95baaace7f2caf6a2",
   };
 
-  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const database = getDatabase(app);
 
   useEffect(() => {
-    // Fetch users
     const usersRef = dbRef(database, "users");
     onValue(usersRef, (snapshot) => {
       const data = snapshot.val();
@@ -62,14 +60,13 @@ const Reports: React.FC = () => {
           id: key,
           name: userData.name,
           email: userData.email,
-          photoURL: userData.photoURL, // Retrieve photoURL
+          photoURL: userData.photoURL,
         };
       }
 
       setUsers(usersList);
     });
 
-    // Fetch recent bookings
     const bookingsRef = dbRef(database, "bookrooms");
     onValue(bookingsRef, (snapshot) => {
       const data = snapshot.val();
@@ -78,41 +75,38 @@ const Reports: React.FC = () => {
       for (const bookingId in data) {
         const booking = data[bookingId];
         bookingsList.push({
-          id: bookingId, // Store the booking ID
+          id: bookingId,
           roomName: booking.roomName,
           studentsSelected: booking.studentsSelected || [],
           date: booking.date,
-          startTime: booking.startTime || "N/A", // Default to "N/A" if not available
-          endTime: booking.endTime || "N/A", // Default to "N/A" if not available
-          borrowedBy: booking.borrowedBy || "", // Default to an empty string if not available
+          startTime: booking.startTime || "N/A",
+          endTime: booking.endTime || "N/A",
+          borrowedBy: booking.borrowedBy || "",
         });
       }
 
       bookingsList.sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      ); // Sort by most recent date
+      );
       setRecentBookings(bookingsList);
       setLoading(false);
     });
 
     const checkExpiredBookings = () => {
-      const now = new Date(); // Fetch current time inside the function
-      console.log("Current PC Time:", now.toString()); // Debugging log
+      const now = new Date();
+      console.log("Current PC Time:", now.toString());
 
       recentBookings.forEach((booking) => {
-        // Construct end time as a Date object
         const endTime = new Date(`${booking.date}T${booking.endTime}:00`);
-        console.log("Booking End Time:", endTime.toString()); // Debugging log
+        console.log("Booking End Time:", endTime.toString());
 
-        // Compare end time with current PC time
         if (now > endTime) {
-          console.log(`Booking ${booking.roomName} has expired.`); // Debugging log
+          console.log(`Booking ${booking.roomName} has expired.`);
           setExpiredBookings((prev) => ({
             ...prev,
             [booking.id]: booking,
           }));
 
-          // Show confirmation dialog with detailed information
           const userConfirmed = window.confirm(
             `The booking for ${booking.roomName} has expired.\n` +
               `Date: ${booking.date}\n` +
@@ -125,11 +119,9 @@ const Reports: React.FC = () => {
           );
 
           if (userConfirmed) {
-            // Delete booking from the database
             remove(dbRef(database, `bookrooms/${booking.id}`))
               .then(() => {
                 console.log(`Booking ${booking.id} has been deleted.`);
-                // Optionally, you can update the UI to reflect the deletion
                 setRecentBookings((prevBookings) =>
                   prevBookings.filter((b) => b.id !== booking.id)
                 );
@@ -142,13 +134,10 @@ const Reports: React.FC = () => {
       });
     };
 
-    // Check for expired bookings every minute
     const intervalId = setInterval(checkExpiredBookings, 60000);
-
-    // Initial check for expired bookings
     checkExpiredBookings();
 
-    return () => clearInterval(intervalId); // Cleanup interval on component unmount
+    return () => clearInterval(intervalId);
   }, [database, recentBookings]);
 
   const handleDeleteExpired = async (id: string) => {
@@ -184,7 +173,7 @@ const Reports: React.FC = () => {
   const formatTime = (time: string): string => {
     const [hour, minute] = time.split(":").map(Number);
     const period = hour >= 12 ? "PM" : "AM";
-    const adjustedHour = hour % 12 || 12; // Convert 0 to 12 for midnight
+    const adjustedHour = hour % 12 || 12;
     const formattedMinute = minute.toString().padStart(2, "0");
 
     return `${adjustedHour}:${formattedMinute} ${period}`;
@@ -242,6 +231,15 @@ const Reports: React.FC = () => {
                 <span className="ml-2 text-black font-bold">Reports</span>
               </a>
             </li>
+            <li className="mb-4">
+              <a
+                href="#"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={reschedule} alt="Reports" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Reschedule</span>
+              </a>
+            </li>
           </ul>
         </nav>
       </aside>
@@ -261,7 +259,6 @@ const Reports: React.FC = () => {
             <div className="col-span-2">
               <div className="card shadow-lg p-4">
                 <h2 className="card-title text-black font-bold">Overview</h2>
-                {/* Placeholder for the bar chart */}
                 <div className="h-64 bg-gray-100 flex items-center justify-center mt-7">
                   <span>Bar Chart</span>
                 </div>
@@ -273,14 +270,12 @@ const Reports: React.FC = () => {
                   Bookings
                 </h2>
                 <ul className="space-y-4">
-                  {/* Added space-y-4 for vertical spacing */}
                   {recentBookings.map((booking) => (
                     <li
                       key={booking.id}
                       className="flex flex-col border-b pb-4"
                     >
                       <div className="flex items-center space-x-4 mb-2">
-                        {/* Display the profile picture of the user who borrowed */}
                         {users[booking.borrowedBy] ? (
                           <div className="flex items-center space-x-4">
                             {users[booking.borrowedBy].photoURL ? (
@@ -319,7 +314,12 @@ const Reports: React.FC = () => {
                           )} - ${formatTime(booking.endTime)}`}
                         </p>
                         <p className="text-xs text-gray-600">
-                          Students: {booking.studentsSelected.join(", ")}
+                          Students:{" "}
+                          {booking.studentsSelected
+                            .map(
+                              (studentId) => users[studentId]?.name || studentId
+                            )
+                            .join(", ")}
                         </p>
                       </div>
                     </li>

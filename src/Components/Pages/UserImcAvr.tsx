@@ -21,18 +21,18 @@ const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
 };
 
-const UserBookRoom: React.FC = () => {
+const BookRoom: React.FC = () => {
   const location = useLocation();
   const roomTitle = location.state?.roomTitle || "Unknown Room";
   const [date, setDate] = useState<Date | null>(null);
 
   const [, setStudents] = useState<string[]>([]);
+
   const [, setStudentName] = useState<string>("");
   const [roomId] = useState(generateRandomRoomId());
   const [bookedSlots, setBookedSlots] = useState<{ start: Date; end: Date }[]>(
     []
   );
-  const [showUserSelection, setShowUserSelection] = useState(false);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
   const [department, setDepartment] = useState<string>("");
@@ -50,9 +50,10 @@ const UserBookRoom: React.FC = () => {
   });
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [showUserSelection, setShowUserSelection] = useState(false);
   const [showStudentsSelection, setShowStudentsSelection] = useState(false);
-  const handleDateChange = (date: any) => setDate(date);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
 
   // Firebase configuration
@@ -273,16 +274,16 @@ const UserBookRoom: React.FC = () => {
       subject: subject,
     };
 
-    // Reference to the pendingbookings node
-    const bookingRef = dbRef(db, `pendingbookings/${roomId}`); // Change this to 'pendingbookings'
+    // Reference to the bookrooms node
+    const bookingRef = dbRef(db, `bookrooms/${roomId}`);
 
     try {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
 
-      toast.success("Waiting for the Admin confirmation!");
+      toast.success("Room booked successfully!");
       setTimeout(() => {
-        navigate("/UserBook");
+        navigate("/Dashboard");
       }, 2000);
 
       // Clear form fields after successful submission
@@ -358,7 +359,7 @@ const UserBookRoom: React.FC = () => {
                 className="flex items-center p-2 hover:bg-gray-200 rounded-md"
               >
                 <img src={dashboardlogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">BOOK ROOM</span>
+                <span className="ml-2 text-black font-bold">Dashboard</span>
               </a>
             </li>
           </ul>
@@ -449,10 +450,11 @@ const UserBookRoom: React.FC = () => {
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                 />
               </div>
+
               <div className="mb-4">
                 <label
                   className="block text-black text-sm font-bold mb-2 mt-2"
-                  htmlFor="students"
+                  htmlFor="borrowed-by"
                 >
                   Booked By:
                 </label>
@@ -481,14 +483,14 @@ const UserBookRoom: React.FC = () => {
                   className="block text-black text-sm font-bold mb-2 mt-2"
                   htmlFor="students"
                 >
-                  Add Students:
+                  Add Equipments:
                 </label>
                 <button
                   type="button"
                   onClick={openStudentsModal}
                   className="p-2 bg-black text-white rounded"
                 >
-                  Select Students
+                  Select Equipments
                 </button>
                 {selectedStudents.length > 0 && (
                   <ul className="mt-3">
@@ -635,9 +637,10 @@ const UserBookRoom: React.FC = () => {
           />
         </div>
       )}
+
       <ToastContainer />
     </div>
   );
 };
 
-export default UserBookRoom;
+export default BookRoom;
