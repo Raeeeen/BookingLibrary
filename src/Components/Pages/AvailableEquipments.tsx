@@ -12,10 +12,10 @@ import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
 import reschedule from "../../assets/rescheduling.png";
-import reportslogo from "../../assets/reportslogo.png";
-import qrCode from "../../assets/qrcodelogo.png";
 import loginHistoryLogo from "../../assets/loginhistory.png";
 import coursesLogo from "../../assets/courses.png";
+import reportslogo from "../../assets/reportslogo.png";
+import qrCode from "../../assets/qrcodelogo.png";
 import Modal from "./Modal";
 import { useNavigate } from "react-router-dom";
 import borrowLogo from "../../assets/borrowicon.png";
@@ -25,23 +25,23 @@ interface User {
   name: string;
 }
 
-// Define a type for the RoomCard props
-interface RoomCardProps {
+// Define a type for the EquipmentsCard props
+interface EquipmentsCardProps {
   title: string;
   image: string;
   onBook: () => void;
-  onViewBookings?: () => void; // Make this prop optional
+  onViewBookings: () => void;
   available: boolean; // New prop to indicate availability
   extraDescription: string; // New prop
-  roomUsed: string; // New prop
+  equipmentUsed: string; // New prop
 }
 
-interface Room {
+interface Equipments {
   title: string;
   imageUrl: string;
   available: boolean;
-  extraDescription: string; // New prop
-  roomUsed: string; // New prop
+  extraDescription: string; // New field
+  equipmentUsed: string; // New field
 }
 
 interface Booking {
@@ -55,17 +55,17 @@ interface UsersData {
   [key: string]: User;
 }
 
-const AvailableRoom: React.FC = () => {
+const AvailableEquipments: React.FC = () => {
   const [filter, setFilter] = useState<"Available" | "Not Available">(
     "Available"
   );
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [equipments, setEquipments] = useState<Equipments[]>([]);
   const [users, setUsers] = useState<any>({});
-  const [selectedRoomBookings, setSelectedRoomBookings] = useState<Booking[]>(
-    []
-  );
+  const [selectedEquipmentBookings, setSelectedEquipmentBookings] = useState<
+    Booking[]
+  >([]);
   const [isModalOpen, setIsModalOpen] = useState(false); // Modal open state
-  const [currentRoomTitle, setCurrentRoomTitle] = useState("");
+  const [currentEquipmentTitle, setCurrentEquipmentTitle] = useState("");
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(false);
 
@@ -85,25 +85,25 @@ const AvailableRoom: React.FC = () => {
   const db: Database = getDatabase(app);
 
   useEffect(() => {
-    const roomsRef = dbRef(db, "rooms");
+    const equipmentRef = dbRef(db, "equipments");
 
-    onValue(roomsRef, (snapshot) => {
+    onValue(equipmentRef, (snapshot) => {
       const data = snapshot.val();
-      const roomArray: Room[] = [];
+      const equipmentsArray: Equipments[] = [];
 
       for (const key in data) {
-        const room = data[key];
-        roomArray.push({
-          title: room.description,
-          imageUrl: room.imageUrl,
-          available: room.availability,
-          extraDescription: room.extraDescription || "",
-          roomUsed: String(room.roomUsed || 0),
+        const equipment = data[key];
+        equipmentsArray.push({
+          title: equipment.description,
+          imageUrl: equipment.imageUrl,
+          available: equipment.availability,
+          extraDescription: equipment.extraDescription || "",
+          equipmentUsed: String(equipment.equipmentUsed || 0),
         });
       }
 
-      console.log("Fetched rooms:", roomArray);
-      setRooms(roomArray);
+      console.log("Fetched equipments:", equipmentsArray);
+      setEquipments(equipmentsArray);
     });
   }, [db]);
 
@@ -129,65 +129,64 @@ const AvailableRoom: React.FC = () => {
     return `${hour.toString().padStart(2, "0")}:${minute} ${amPm}`;
   };
 
-  const handleBookClick = (roomTitle: string) => {
+  const handleBookClick = (equipmentTitle: string) => {
     // Use a regular expression to match "IMC/AVR" regardless of slashes
-    if (/IMC\/?AVR/.test(roomTitle)) {
-      navigate("/ImcAvr", { state: { roomTitle } });
-    } else if (/Tutoring Room/.test(roomTitle)) {
-      navigate("/TutoringAvailableTable", { state: { roomTitle } });
+    if (/IMC\/?AVR/.test(equipmentTitle)) {
+      navigate("/ImcAvr", { state: { equipmentTitle } });
     } else {
-      navigate("/BookRoom", { state: { roomTitle } });
+      navigate("/BookEquipments", { state: { equipmentTitle } });
     }
   };
 
   // Function to handle "View Bookings" click
-  const handleViewBookingsClick = (roomTitle: string) => {
-    // Fetch booking data for the given roomTitle from Firebase
-    const bookingsRef = dbRef(db, "bookrooms");
-    onValue(bookingsRef, (snapshot) => {
-      const data = snapshot.val();
-      const bookings: Booking[] = [];
+  const handleViewBookingsClick = (equipmentTitle: string) => {
+    // Fetch booking data for the given equipmentTitle from Firebase
+    const bookingsRef = dbRef(db, "bookequipments");
+    onValue(
+      bookingsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        const bookings: Booking[] = [];
 
-      for (const key in data) {
-        const booking = data[key];
-        if (booking.roomName === roomTitle) {
-          bookings.push({
-            date: booking.date,
-            startTime: booking.startTime,
-            endTime: booking.endTime,
-            borrowedBy: booking.borrowedBy || [],
-          });
+        for (const key in data) {
+          const booking = data[key];
+          // Update the condition to match 'equipmentName' instead of 'equipmentTitle'
+          if (booking.equipmentName === equipmentTitle) {
+            bookings.push({
+              date: booking.date,
+              startTime: booking.startTime,
+              endTime: booking.endTime,
+              borrowedBy: booking.borrowedBy || {},
+            });
+          }
         }
-      }
 
-      // Set the bookings in state and open the modal
-      setSelectedRoomBookings(bookings);
-      setCurrentRoomTitle(roomTitle);
-      setIsModalOpen(true);
-    });
+        console.log(`Fetched bookings for ${equipmentTitle}:`, bookings);
+        setSelectedEquipmentBookings(bookings);
+        setCurrentEquipmentTitle(equipmentTitle);
+        setIsModalOpen(true);
+      },
+      (error) => {
+        console.error("Error fetching bookings:", error);
+        // Optionally, set an error state here
+      }
+    );
   };
 
   // Function to close the modal
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedRoomBookings([]);
+    setSelectedEquipmentBookings([]);
   };
 
-  // Helper function to determine if "View Bookings" should be shown
-  const shouldShowViewBookings = (roomTitle: string): boolean => {
-    const excludedRooms = ["Tutoring Room"];
-    return !excludedRooms.includes(roomTitle);
-  };
-
-  // Update the RoomCard component to use the defined types
-  const RoomCard: React.FC<RoomCardProps> = ({
+  const EquipmentsCard: React.FC<EquipmentsCardProps> = ({
     title,
     image,
     onBook,
     onViewBookings,
     available,
     extraDescription,
-    roomUsed,
+    equipmentUsed,
   }) => (
     <div className="card bg-white shadow-xl">
       <figure>
@@ -195,6 +194,7 @@ const AvailableRoom: React.FC = () => {
       </figure>
       <div className="card-body">
         <h2 className="card-title text-black font-bold">{title}</h2>
+
         {/* Conditionally render extraDescription */}
         {extraDescription && extraDescription !== "0" && (
           <p className="text-gray-600 mb-2">
@@ -204,37 +204,35 @@ const AvailableRoom: React.FC = () => {
             </span>
           </p>
         )}
-        {/* Conditionally render roomUsed */}
-        {roomUsed && roomUsed !== "0" && (
+
+        {/* Conditionally render equipmentUsed */}
+        {equipmentUsed && equipmentUsed !== "0" && (
           <p className="text-gray-600 mb-2">
-            Room Used:{" "}
-            <span className="font-semibold text-blue-600">{roomUsed}</span>
+            Equipment Used:{" "}
+            <span className="font-semibold text-blue-600">{equipmentUsed}</span>
           </p>
         )}
 
-        <div className="card-actions justify-end">
+        <div className="card-actions justify-start">
           <button
             onClick={onBook}
             className={`btn bg-black text-white ${
               available ? "" : "opacity-50 cursor-not-allowed"
             }`}
-            disabled={!available} // Disable the button if not available
+            disabled={!available}
           >
-            Book
+            Borrow
           </button>
-          {/* Conditionally render the "View Bookings" button */}
-          {onViewBookings && (
-            <button onClick={onViewBookings} className="btn btn-accent">
-              View Bookings
-            </button>
-          )}
+          <button onClick={onViewBookings} className="btn btn-accent">
+            View Borrowings
+          </button>
         </div>
       </div>
     </div>
   );
 
-  const filteredRooms = rooms.filter((room) =>
-    filter === "Available" ? room.available : !room.available
+  const filteredEquipments = equipments.filter((equipments) =>
+    filter === "Available" ? equipments.available : !equipments.available
   );
 
   return (
@@ -419,7 +417,7 @@ const AvailableRoom: React.FC = () => {
       </aside>
       <main className="flex-1 p-6 bg-white h-screen overflow-y-auto">
         <div className="container mx-auto p-4">
-          <h1 className="text-2xl font-bold mb-4 text-black">Rooms</h1>
+          <h1 className="text-2xl font-bold mb-4 text-black">Equipments</h1>
           <div className="mb-4 flex space-x-4">
             <button
               className={`btn ${
@@ -438,21 +436,17 @@ const AvailableRoom: React.FC = () => {
               Not Available
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {filteredRooms.map((room, index) => (
-              <RoomCard
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredEquipments.map((equipment, index) => (
+              <EquipmentsCard
                 key={index}
-                title={room.title}
-                image={room.imageUrl}
-                onBook={() => handleBookClick(room.title)}
-                onViewBookings={
-                  shouldShowViewBookings(room.title)
-                    ? () => handleViewBookingsClick(room.title)
-                    : undefined
-                }
-                available={room.available} // Pass the availability prop
-                extraDescription={room.extraDescription}
-                roomUsed={room.roomUsed}
+                title={equipment.title}
+                image={equipment.imageUrl}
+                onBook={() => handleBookClick(equipment.title)}
+                onViewBookings={() => handleViewBookingsClick(equipment.title)}
+                available={equipment.available}
+                extraDescription={equipment.extraDescription}
+                equipmentUsed={equipment.equipmentUsed}
               />
             ))}
           </div>
@@ -461,10 +455,10 @@ const AvailableRoom: React.FC = () => {
       {/* Modal to show bookings */}
       <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
         <h2 className="text-2xl font-bold mb-4 text-center text-black">
-          {currentRoomTitle} Bookings
+          {currentEquipmentTitle} Bookings
         </h2>
-        {selectedRoomBookings.length > 0 ? (
-          selectedRoomBookings.map((booking, index) => (
+        {selectedEquipmentBookings.length > 0 ? (
+          selectedEquipmentBookings.map((booking, index) => (
             <div
               key={index}
               className="bg-gray-100 p-4 rounded-lg shadow mb-4 border border-gray-300 "
@@ -502,7 +496,7 @@ const AvailableRoom: React.FC = () => {
           ))
         ) : (
           <p className="text-center text-gray-500">
-            No bookings found for this room.
+            No Borrowings found for this Equipments.
           </p>
         )}
       </Modal>
@@ -510,4 +504,4 @@ const AvailableRoom: React.FC = () => {
   );
 };
 
-export default AvailableRoom;
+export default AvailableEquipments;

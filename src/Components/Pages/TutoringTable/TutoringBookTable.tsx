@@ -7,42 +7,37 @@ import {
   Database,
   get,
 } from "firebase/database";
-import schoolLogo from "../../assets/scclogo.png";
-import dashboardlogo from "../../assets/dashboardlogo.png";
-import roomslogo from "../../assets/roomslogo.png";
-import equipmentslogo from "../../assets/equipmentslogo.png";
-import reschedule from "../../assets/rescheduling.png";
-import reportslogo from "../../assets/reportslogo.png";
-import qrCode from "../../assets/qrcodelogo.png";
+import schoolLogo from "../../../assets/scclogo.png";
+import dashboardlogo from "../../../assets/dashboardlogo.png";
+import roomslogo from "../../../assets/roomslogo.png";
+import equipmentslogo from "../../../assets/equipmentslogo.png";
+import reschedule from "../../../assets/rescheduling.png";
+import reportslogo from "../../../assets/reportslogo.png";
+
+import qrCode from "../../../assets/qrcodelogo.png";
+import coursesLogo from "../../../assets/courses.png";
+import borrowLogo from "../../../assets/borrowicon.png";
+import managedataLogo from "../../../assets/managelogo.png";
+import loginHistoryLogo from "../../../assets/loginhistory.png";
 import { FirebaseApp, initializeApp } from "firebase/app";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
-import coursesLogo from "../../assets/courses.png";
-import loginHistoryLogo from "../../assets/loginhistory.png";
 import "react-datepicker/dist/react-datepicker.css";
-import UserSelection from "./BorrowedUserSelection";
-import CourseSelection from "./CourseSelection";
-import EquipmentSelection from "./EquipmentSelection";
-import QRCode from "qrcode";
+import UserSelection from "../BorrowedUserSelection";
+import CourseSelection from "./../CourseSelection";
 import { getStorage, ref, uploadString } from "firebase/storage";
-import borrowLogo from "../../assets/borrowicon.png";
-import managedataLogo from "../../assets/managelogo.png";
+import QRCode from "qrcode";
+import AddStudentsUserSelection from "../AddStudentsUserSelection";
 
 const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
 };
 
-export interface Equipment {
-  id: string;
-  name: string;
-  description: string;
-  availability: boolean;
-}
-
-const imcAvr: React.FC = () => {
+const TutoringBookTable: React.FC = () => {
   const location = useLocation();
   const roomTitle = location.state?.roomTitle || "Unknown Room";
+  const tableTitle = location.state?.tableTitle || "Unknown Table";
   const [date, setDate] = useState<Date | null>(null);
 
   const [, setStudents] = useState<string[]>([]);
@@ -68,13 +63,9 @@ const imcAvr: React.FC = () => {
     amPm: "AM",
   });
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [selectedStudents] = useState<string[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
-  const [equipments, setEquipments] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
-  const [showEquipmentsSelection, setShowEquipmentsSelection] = useState(false);
+  const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const [courses, setCourses] = useState<
     { id: string; name: string; description: string }[]
   >([]); // New state
@@ -117,33 +108,6 @@ const imcAvr: React.FC = () => {
     };
 
     fetchUsers();
-  }, [db]);
-
-  useEffect(() => {
-    const fetchEquipments = async () => {
-      const equipmentsRef = dbRef(db, "equipments");
-      const snapshot = await get(equipmentsRef);
-      const data = snapshot.val();
-      const fetchedEquipments: {
-        id: string;
-        name: string;
-        description: string;
-      }[] = [];
-
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchedEquipments.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
-        }
-      }
-
-      setEquipments(fetchedEquipments);
-    };
-
-    fetchEquipments();
   }, [db]);
 
   useEffect(() => {
@@ -204,6 +168,11 @@ const imcAvr: React.FC = () => {
     }
 
     if (selectedUsers.length === 0) {
+      toast.error("Please select at least one students.");
+      return;
+    }
+
+    if (selectedStudents.length === 0) {
       toast.error("Please select at least one students.");
       return;
     }
@@ -312,6 +281,14 @@ const imcAvr: React.FC = () => {
       return;
     }
 
+    // Check if the booking is exactly one hour
+    const duration =
+      (endTimeDateUTC8.getTime() - startTimeDateUTC8.getTime()) / 60000; // duration in minutes
+    if (duration !== 60) {
+      toast.error("You can only book for 1h.");
+      return;
+    }
+
     // Check if the new booking overlaps with any existing bookings
     const isOverlapping = bookedSlots.some((slot) => {
       const slotStart = new Date(
@@ -391,9 +368,9 @@ const imcAvr: React.FC = () => {
       borrowedBy: selectedUsers,
       purpose: purpose,
       department: department,
+      tables: tableTitle,
       course: validCourses,
       subject: subject,
-      equipments: selectedEquipments, // Save selected equipments
       gender: gender,
     };
 
@@ -404,35 +381,22 @@ const imcAvr: React.FC = () => {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
 
-      // Update equipment availability to false without removing other fields
-      for (const equipmentId of selectedEquipments) {
-        const equipmentRef = dbRef(db, `equipments/${equipmentId}`);
-        const equipmentSnapshot = await get(equipmentRef);
-        const equipmentData = equipmentSnapshot.val();
-        await set(equipmentRef, { ...equipmentData, availability: false });
-      }
-
       // Generate QR code
       const qrCodeData = `Room Name: ${roomTitle}, Room ID: ${roomId}, Students Selected: ${selectedStudents.join(
         ", "
-      )}, Equipments: ${selectedEquipments}
-      Date: ${formattedDate}, Start Time: ${bookingData.startTime}, End Time: ${
-        bookingData.endTime
-      }, Borrowed By: ${selectedUsers.join(
+      )}, Date: ${formattedDate}, Start Time: ${
+        bookingData.startTime
+      }, End Time: ${bookingData.endTime}, Borrowed By: ${selectedUsers.join(
         ", "
-      )}, Purpose: ${purpose}, Department: ${department}, Course: ${validCourses.join(
+      )}, Purpose: ${purpose}, Department: ${department}, Tables: ${tableTitle}, Course: ${validCourses.join(
         ", "
       )}, Subject: ${subject}, Gender: ${gender}`;
 
       const qrCodeUrl = await QRCode.toDataURL(qrCodeData);
 
-      const userid = selectedUsers.join(", ");
       // Upload QR code to Firebase Storage
       const storage = getStorage(app);
-      const qrCodeRef = ref(
-        storage,
-        `QRCode/${userid}/${roomTitle}/${roomId}.png`
-      );
+      const qrCodeRef = ref(storage, `QRCode/${roomId}/${roomId}.png`);
       await uploadString(qrCodeRef, qrCodeUrl.split(",")[1], "base64", {
         contentType: "image/png",
       });
@@ -452,7 +416,6 @@ const imcAvr: React.FC = () => {
       setCourses([]);
       setGender("");
       setSubject("");
-      setSelectedEquipments([]); // Reset equipments selection
       setStartTime({ hours: "0", minutes: "00", amPm: "AM" });
       setEndTime({ hours: "0", minutes: "00", amPm: "AM" });
     } catch (error) {
@@ -493,9 +456,9 @@ const imcAvr: React.FC = () => {
     setShowBorrowedBySelection(false);
   };
 
-  const handleSelectEquipments = (selected: string[]) => {
-    setSelectedEquipments(selected);
-    setShowEquipmentsSelection(false);
+  const handleSelectStudents = (selected: string[]) => {
+    setSelectedStudents(selected);
+    setShowStudentsSelection(false);
   };
 
   const handleSelectCourses = (selected: string[]) => {
@@ -505,7 +468,7 @@ const imcAvr: React.FC = () => {
 
   // Handle show modals
   const openBorrowedByModal = () => setShowBorrowedBySelection(true);
-  const openEquipmentsModal = () => setShowEquipmentsSelection(true);
+  const openStudentsModal = () => setShowStudentsSelection(true);
   const openCourseModal = () => setShowCourseSelection(true);
 
   return (
@@ -698,6 +661,9 @@ const imcAvr: React.FC = () => {
               <h2 className="text-center text-2xl font-bold mb-6 text-black">
                 {roomTitle}
               </h2>
+              <h2 className="text-center text-2xl font-bold mb-6 text-black">
+                {tableTitle}
+              </h2>
               <div className="flex flex-wrap mb-4">
                 {" "}
                 {/* Use flexbox for arrangement */}
@@ -851,30 +817,28 @@ const imcAvr: React.FC = () => {
                   <div className="mb-4">
                     <label
                       className="block text-black text-sm font-bold mb-2 mt-2"
-                      htmlFor="equipments"
+                      htmlFor="students"
                     >
-                      Add Equipments:
+                      Add Students:
                     </label>
                     <button
                       type="button"
-                      onClick={openEquipmentsModal}
+                      onClick={openStudentsModal}
                       className="p-2 bg-black text-white rounded"
                     >
-                      Select Equipments
+                      Select Students
                     </button>
-                    {selectedEquipments.length > 0 && (
+                    {selectedStudents.length > 0 && (
                       <ul className="mt-3">
-                        {selectedEquipments.map((equipmentId, index) => {
-                          return (
-                            <li
-                              key={index}
-                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                            >
-                              {equipments.find((u) => u.id === equipmentId)
-                                ?.description || equipmentId}
-                            </li>
-                          );
-                        })}
+                        {selectedStudents.map((student, index) => (
+                          <li
+                            key={index}
+                            className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                          >
+                            {users.find((u) => u.id === student)?.name ||
+                              student}
+                          </li>
+                        ))}
                       </ul>
                     )}
                   </div>
@@ -991,7 +955,6 @@ const imcAvr: React.FC = () => {
                   </div>
                 </div>
               </div>
-
               <div className="flex items-center justify-between">
                 <button
                   type="submit"
@@ -1015,13 +978,13 @@ const imcAvr: React.FC = () => {
           />
         </div>
       )}
-      {showEquipmentsSelection && (
+      {showStudentsSelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <EquipmentSelection
-            equipments={equipments}
-            selectedEquipments={selectedEquipments}
-            onSelect={handleSelectEquipments}
-            onCancel={() => setShowEquipmentsSelection(false)}
+          <AddStudentsUserSelection
+            users={users}
+            selectedUsers={selectedStudents}
+            onSelect={handleSelectStudents}
+            onCancel={() => setShowStudentsSelection(false)}
           />
         </div>
       )}
@@ -1041,4 +1004,4 @@ const imcAvr: React.FC = () => {
   );
 };
 
-export default imcAvr;
+export default TutoringBookTable;

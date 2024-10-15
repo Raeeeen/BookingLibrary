@@ -6,6 +6,7 @@ import {
   set,
   Database,
   get,
+  onValue,
 } from "firebase/database";
 import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
@@ -27,21 +28,20 @@ const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
 };
 
-const BookRoom: React.FC = () => {
+const UserBookEquipments: React.FC = () => {
   const location = useLocation();
-  const roomTitle = location.state?.roomTitle || "Unknown Room";
+  const equipmentTitle = location.state?.equipmentTitle || "Unknown Equipments";
   const [date, setDate] = useState<Date | null>(null);
 
   const [, setStudents] = useState<string[]>([]);
 
   const [, setStudentName] = useState<string>("");
-  const [roomId] = useState(generateRandomRoomId());
-  const [bookedSlots, setBookedSlots] = useState<{ start: Date; end: Date }[]>(
-    []
-  );
+  const [equipmentId] = useState(generateRandomRoomId());
+  const [, setBookedSlots] = useState<{ start: Date; end: Date }[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
-  const [gender, setGender] = useState<string>("");
+  const [locationField, setlocation] = useState<string>("");
+  const [contact, setcontact] = useState<string>("");
   const [department, setDepartment] = useState<string>("");
   const [subject, setSubject] = useState<string>("");
   const [startTime, setStartTime] = useState({
@@ -55,19 +55,21 @@ const BookRoom: React.FC = () => {
     amPm: "AM",
   });
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [showUserSelection, setShowUserSelection] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
+  const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const handleDateChange = (date: any) => setDate(date);
+  const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
+  const [showEquipmentsSelection, setShowEquipmentsSelection] = useState(false);
   const [equipments, setEquipments] = useState<
     { id: string; name: string; description: string }[]
   >([]); // New state
-  const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
-  const [showEquipmentsSelection, setShowEquipmentsSelection] = useState(false);
   const [courses, setCourses] = useState<
     { id: string; name: string; description: string }[]
   >([]); // New state
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [showCourseSelection, setShowCourseSelection] = useState(false);
+  const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
 
   // Firebase configuration
@@ -172,13 +174,13 @@ const BookRoom: React.FC = () => {
   useEffect(() => {
     // Fetch booked slots
     const fetchBookedSlots = async () => {
-      const bookingsRef = dbRef(db, "bookrooms");
+      const bookingsRef = dbRef(db, "bookequipments");
       const snapshot = await get(bookingsRef);
       const data = snapshot.val();
       const slots: { start: Date; end: Date }[] = [];
 
       for (const key in data) {
-        if (data[key].roomName === roomTitle) {
+        if (data[key].equipmentName === equipmentTitle) {
           const start = new Date(data[key].date + "T" + data[key].time);
           const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour booking
           slots.push({ start, end });
@@ -189,7 +191,7 @@ const BookRoom: React.FC = () => {
     };
 
     fetchBookedSlots();
-  }, [db, roomTitle]);
+  }, [db, equipmentTitle]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -201,11 +203,6 @@ const BookRoom: React.FC = () => {
 
     if (selectedUsers.length === 0) {
       toast.error("Please select at least one students.");
-      return;
-    }
-
-    if (selectedEquipments.length === 0) {
-      toast.error("Please select at least one equipments.");
       return;
     }
 
@@ -229,13 +226,18 @@ const BookRoom: React.FC = () => {
       return;
     }
 
-    if (!gender) {
-      toast.error("Please select gender.");
+    if (!date) {
+      toast.error("Please select a date.");
       return;
     }
 
-    if (!date) {
-      toast.error("Please select a date.");
+    if (!contact) {
+      toast.error("Please enter the phone number.");
+      return;
+    }
+
+    if (!locationField) {
+      toast.error("Please enter a location.");
       return;
     }
 
@@ -313,75 +315,14 @@ const BookRoom: React.FC = () => {
       return;
     }
 
-    // Check if the new booking overlaps with any existing bookings
-    const isOverlapping = bookedSlots.some((slot) => {
-      const slotStart = new Date(
-        new Date(slot.start).getTime() -
-          new Date(slot.start).getTimezoneOffset() * 60000 +
-          8 * 3600000
-      ); // Ensure slot.start is adjusted to UTC+8
-      const slotEnd = new Date(
-        new Date(slot.end).getTime() -
-          new Date(slot.end).getTimezoneOffset() * 60000 +
-          8 * 3600000
-      ); // Ensure slot.end is adjusted to UTC+8
-
-      // Overlapping condition: Start time before existing end time AND end time after existing start time
-      return (
-        slotStart.toDateString() === startTimeDateUTC8.toDateString() &&
-        startTimeDateUTC8 < slotEnd &&
-        endTimeDateUTC8 > slotStart
-      );
-    });
-
-    if (isOverlapping) {
-      toast.error("The selected time slot overlaps with an existing booking.");
-      return;
-    }
-
-    // Check if the time slot already exists in the database
-    const existingBookingsRef = dbRef(db, "bookrooms");
-    const existingBookingsSnapshot = await get(existingBookingsRef);
-    const existingBookings = existingBookingsSnapshot.val();
-
-    if (existingBookings) {
-      const isTimeSlotTaken = Object.values(existingBookings).some(
-        (booking: any) => {
-          const bookingDateUTC8 = new Date(
-            new Date(booking.date).getTime() -
-              new Date(booking.date).getTimezoneOffset() * 60000 +
-              8 * 3600000
-          )
-            .toISOString()
-            .split("T")[0];
-          return (
-            bookingDateUTC8 === startTimeDateUTC8.toISOString().split("T")[0] &&
-            booking.startTime ===
-              `${startHours24.toString().padStart(2, "0")}:${startMinutes24
-                .toString()
-                .padStart(2, "0")}` &&
-            booking.endTime ===
-              `${endHours24.toString().padStart(2, "0")}:${endMinutes24
-                .toString()
-                .padStart(2, "0")}`
-          );
-        }
-      );
-
-      if (isTimeSlotTaken) {
-        toast.error("This time slot is already booked.");
-        return;
-      }
-    }
-
     // Format the date as YYYY-MM-DD
     const formattedDate = startTimeDateUTC8.toISOString().split("T")[0];
 
     // Booking details
     const bookingData = {
-      roomName: roomTitle,
-      roomId: roomId,
-      equipments: selectedEquipments,
+      equipmentName: equipmentTitle,
+      equipmentId: equipmentId,
+      studentsSelected: selectedStudents,
       date: formattedDate,
       startTime: `${startHours24.toString().padStart(2, "0")}:${startMinutes24
         .toString()
@@ -391,26 +332,22 @@ const BookRoom: React.FC = () => {
         .padStart(2, "0")}`,
       borrowedBy: selectedUsers,
       purpose: purpose,
+      location: locationField,
+      contact: contact,
       department: department,
       course: validCourses,
+      equipments: selectedEquipments,
       subject: subject,
-      gender: gender,
     };
 
     // Reference to the bookrooms node
-    const bookingRef = dbRef(db, `pendingRoomBookings/${roomId}`);
+    const bookingRef = dbRef(db, `pendingEquipmentBookings/${equipmentId}`);
 
     try {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
 
-      // Update equipment availability to false without removing other fields
-      for (const equipmentId of selectedEquipments) {
-        const equipmentRef = dbRef(db, `equipments/${equipmentId}`);
-        const equipmentSnapshot = await get(equipmentRef);
-        const equipmentData = equipmentSnapshot.val();
-        await set(equipmentRef, { ...equipmentData, availability: false });
-      }
+      changeAvailabilityToFalse(equipmentTitle);
 
       toast.success("Waiting for the Admin confirmation!");
       setTimeout(() => {
@@ -426,15 +363,64 @@ const BookRoom: React.FC = () => {
       setDepartment("");
       setCourses([]);
       setSubject("");
-      setGender("");
       setStartTime({ hours: "0", minutes: "00", amPm: "AM" });
       setEndTime({ hours: "0", minutes: "00", amPm: "AM" });
-      setSelectedEquipments([]); // Reset equipments selection
     } catch (error) {
-      console.error("Error booking room:", error);
+      console.error("Error booking equipment:", error);
       toast.error(
-        "An error occurred while booking the room. Please try again."
+        "An error occurred while booking the equipment. Please try again."
       );
+    }
+  };
+
+  // Function to get the equipment key by matching description
+  const getEquipmentKeyByDescription = async (
+    db: Database,
+    description: string
+  ): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const equipmentsRef = dbRef(db, "equipments");
+
+      onValue(equipmentsRef, (snapshot) => {
+        const data = snapshot.val();
+        let foundKey: string | null = null;
+
+        for (const key in data) {
+          const equipment = data[key];
+          if (equipment.description === description) {
+            foundKey = key;
+            break;
+          }
+        }
+
+        if (foundKey) {
+          resolve(foundKey);
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  };
+
+  // Usage of the function to change availability
+  const changeAvailabilityToFalse = async (description: string) => {
+    const db = getDatabase();
+
+    try {
+      const equipmentKey = await getEquipmentKeyByDescription(db, description);
+
+      if (equipmentKey) {
+        const availabilityRef = dbRef(
+          db,
+          `equipments/${equipmentKey}/availability`
+        );
+        await set(availabilityRef, false);
+        console.log(`Availability for "${description}" has been set to false.`);
+      } else {
+        console.log(`Equipment with description "${description}" not found.`);
+      }
+    } catch (error) {
+      console.error("Error updating availability:", error);
     }
   };
 
@@ -462,9 +448,15 @@ const BookRoom: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => setEndTime({ ...endTime, [e.target.name]: e.target.value });
 
-  const handleSelectUsers = (selected: string[]) => {
+  // Functions to handle user selection
+  const handleSelectBorrowedBy = (selected: string[]) => {
     setSelectedUsers(selected);
-    setShowUserSelection(false); // Close the user selection modal
+    setShowBorrowedBySelection(false);
+  };
+
+  const handleSelectStudents = (selected: string[]) => {
+    setSelectedStudents(selected);
+    setShowStudentsSelection(false);
   };
 
   const handleSelectEquipments = (selected: string[]) => {
@@ -477,12 +469,13 @@ const BookRoom: React.FC = () => {
     setShowCourseSelection(false);
   };
 
-  const openEquipmentsModal = () => setShowEquipmentsSelection(true);
-  const openCourseModal = () => setShowCourseSelection(true);
-
   // Calculate the minimum date for booking (3 days from today)
   const minBookingDate = new Date();
   minBookingDate.setDate(minBookingDate.getDate() + 3);
+
+  const openEquipmentsModal = () => setShowEquipmentsSelection(true);
+  const openCourseModal = () => setShowCourseSelection(true);
+  const openUserModal = () => setShowBorrowedBySelection(true);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -556,19 +549,19 @@ const BookRoom: React.FC = () => {
               className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
             >
               <h2 className="text-center text-2xl font-bold mb-6 text-black">
-                {roomTitle}
+                {equipmentTitle}
               </h2>
               <div className="mb-4">
                 <label
                   className="block text-black text-sm font-bold mb-2"
                   htmlFor="room-id"
                 >
-                  Room ID
+                  Equipment ID
                 </label>
                 <input
                   id="room-id"
                   type="text"
-                  value={roomId}
+                  value={equipmentId}
                   readOnly
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                 />
@@ -653,49 +646,92 @@ const BookRoom: React.FC = () => {
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                 />
               </div>
+
               <div>
                 <label
-                  htmlFor="gender"
+                  htmlFor="location"
                   className="block text-black text-sm font-bold mb-2 mt-2"
                 >
-                  Gender:
+                  Location:
                 </label>
-                <select
-                  id="gender"
-                  value={gender} // Consider renaming `purpose` to `gender` for clarity
-                  onChange={(e) => setGender(e.target.value)}
+                <input
+                  type="text"
+                  id="location"
+                  value={locationField}
+                  onChange={(e) => setlocation(e.target.value)}
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="contact"
+                  className="block text-black text-sm font-bold mb-2 mt-2"
                 >
-                  <option value="">Select Gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                </select>
+                  Phone Number:
+                </label>
+                <input
+                  type="text"
+                  id="contact"
+                  value={contact}
+                  onChange={(e) => {
+                    let value = e.target.value;
+
+                    // Remove non-numeric characters
+                    value = value.replace(/\D/g, "");
+
+                    // Ensure the number starts with "09" and is exactly 11 digits long
+                    if (value.startsWith("09")) {
+                      if (value.length > 11) {
+                        value = value.slice(0, 11); // Trim to 11 digits
+                      }
+                    } else {
+                      // Automatically prepend "09" if not present
+                      value = `09${value}`.slice(0, 11); // Prepend "09" and trim to 11 digits
+                    }
+
+                    setcontact(value);
+                  }}
+                  maxLength={11} // Maximum length of the input
+                  placeholder="09xxxxxxxxx" // Hint for the user
+                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                />
               </div>
 
               <div className="mb-4">
                 <label
                   className="block text-black text-sm font-bold mb-2 mt-2"
-                  htmlFor="borrowed-by"
+                  htmlFor="students"
                 >
-                  Booked By:
+                  Borrowed By:
                 </label>
+                <button
+                  type="button"
+                  onClick={openUserModal}
+                  className="p-2 bg-black text-white rounded"
+                >
+                  Select Borowed By
+                </button>
                 {selectedUsers.length > 0 && (
                   <ul className="mt-3">
-                    {selectedUsers.map((user, index) => (
-                      <li
-                        key={index}
-                        className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                      >
-                        {users.find((u) => u.id === user)?.name || user}
-                      </li>
-                    ))}
+                    {selectedUsers.map((userId) => {
+                      const user = users.find((u) => u.id === userId);
+                      return (
+                        <li
+                          key={userId}
+                          className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                        >
+                          {user ? user.name : userId}{" "}
+                          {/* Fallback to user ID if name not found */}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
               <div className="mb-4">
                 <label
                   className="block text-black text-sm font-bold mb-2 mt-2"
-                  htmlFor="students"
+                  htmlFor="equipments"
                 >
                   Add Equipments:
                 </label>
@@ -708,15 +744,17 @@ const BookRoom: React.FC = () => {
                 </button>
                 {selectedEquipments.length > 0 && (
                   <ul className="mt-3">
-                    {selectedEquipments.map((equipmentId, index) => (
-                      <li
-                        key={index}
-                        className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                      >
-                        {equipments.find((u) => u.id === equipmentId)
-                          ?.description || equipmentId}
-                      </li>
-                    ))}
+                    {selectedEquipments.map((equipmentId, index) => {
+                      return (
+                        <li
+                          key={index}
+                          className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                        >
+                          {equipments.find((u) => u.id === equipmentId)
+                            ?.description || equipmentId}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -833,13 +871,24 @@ const BookRoom: React.FC = () => {
           </div>
         </div>
       </main>
-      {showUserSelection && (
+      {/* User selection modals */}
+      {showBorrowedBySelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <UserSelection
             users={[users.find((user) => user.id === currentUserId)!]} // Pass only the current user
             selectedUsers={selectedUsers}
-            onSelect={handleSelectUsers}
-            onCancel={() => setShowUserSelection(false)}
+            onSelect={handleSelectBorrowedBy}
+            onCancel={() => setShowBorrowedBySelection(false)}
+          />
+        </div>
+      )}
+      {showStudentsSelection && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <UserSelection
+            users={users}
+            selectedUsers={selectedStudents}
+            onSelect={handleSelectStudents}
+            onCancel={() => setShowStudentsSelection(false)}
           />
         </div>
       )}
@@ -869,4 +918,4 @@ const BookRoom: React.FC = () => {
   );
 };
 
-export default BookRoom;
+export default UserBookEquipments;

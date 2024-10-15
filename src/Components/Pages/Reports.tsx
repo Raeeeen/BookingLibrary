@@ -1,14 +1,37 @@
 import React, { useEffect, useState } from "react";
-import { ref as dbRef, getDatabase, onValue, remove } from "firebase/database";
+import {
+  DataSnapshot,
+  ref as dbRef,
+  getDatabase,
+  onValue,
+  ref,
+} from "firebase/database";
 import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
 import reschedule from "../../assets/rescheduling.png";
 import reportslogo from "../../assets/reportslogo.png";
+import qrCode from "../../assets/qrcodelogo.png";
+import coursesLogo from "../../assets/courses.png";
+import loginHistoryLogo from "../../assets/loginhistory.png";
 import { initializeApp } from "firebase/app";
 import Lottie from "lottie-react";
 import loadingAnimation from "../../assets/loadinganimation2.json";
+import borrowLogo from "../../assets/borrowicon.png";
+import managedataLogo from "../../assets/managelogo.png";
+
+interface Transaction {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  roomName?: string;
+  equipmentName?: string;
+  equipmentDescription?: string;
+  type: "room" | "equipment";
+  borrowedBy: string; // Added borrowedBy field
+}
 
 interface User {
   id: string;
@@ -19,10 +42,15 @@ interface User {
 
 interface Booking {
   id: string;
-  roomName: string;
-  studentsSelected: string[];
+  roomName?: string;
+  equipmentName?: string;
+  equipmentDescription?: string;
+  studentsSelected?: string[]; // Optional since it may not be used for IMC/AVR
   date: string;
+  equipments?: string[]; // New field for equipment array
+  equipments1?: string[]; // New field for equipment array
   startTime: string;
+  tables?: string; // New field for tables
   endTime: string;
   borrowedBy: string;
 }
@@ -31,9 +59,15 @@ const Reports: React.FC = () => {
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [users, setUsers] = useState<{ [key: string]: User }>({});
   const [loading, setLoading] = useState(true);
-  const [expiredBookings, setExpiredBookings] = useState<{
-    [key: string]: Booking;
+  const [activeTab, setActiveTab] = useState<"rooms" | "equipments">("rooms");
+  const [equipmentDescriptions, setEquipmentDescriptions] = useState<{
+    [key: string]: string;
   }>({});
+  const [tablesData, setTablesData] = useState<{ [key: string]: string }>({});
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const [currentTransactions, setCurrentTransactions] = useState<Transaction[]>(
+    []
+  );
 
   const firebaseConfig = {
     apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
@@ -46,11 +80,55 @@ const Reports: React.FC = () => {
   };
 
   const app = initializeApp(firebaseConfig);
-  const database = getDatabase(app);
+  const db = getDatabase(app);
 
   useEffect(() => {
-    const usersRef = dbRef(database, "users");
-    onValue(usersRef, (snapshot) => {
+    const transactionsRef = ref(db, "TransactionHistory");
+
+    const fetchTransactions = () => {
+      onValue(transactionsRef, (snapshot) => {
+        const transactionsData: Transaction[] = [];
+        snapshot.forEach((childSnapshot) => {
+          const userTransactions = childSnapshot.val();
+
+          // Scan both rooms and equipment transactions under each userId
+          if (userTransactions.rooms) {
+            Object.entries(userTransactions.rooms).forEach(
+              ([id, transaction]) => {
+                const roomTransaction = transaction as Record<string, any>;
+                transactionsData.push({
+                  ...roomTransaction,
+                  id,
+                  borrowedBy: childSnapshot.key, // Store user ID from transaction path
+                  type: "room",
+                } as Transaction);
+              }
+            );
+          }
+          if (userTransactions.equipments) {
+            Object.entries(userTransactions.equipments).forEach(
+              ([id, transaction]) => {
+                const equipmentTransaction = transaction as Record<string, any>;
+                transactionsData.push({
+                  ...equipmentTransaction,
+                  id,
+                  borrowedBy: childSnapshot.key, // Store user ID from transaction path
+                  type: "equipment",
+                } as Transaction);
+              }
+            );
+          }
+        });
+        setCurrentTransactions(transactionsData);
+      });
+    };
+
+    fetchTransactions();
+  }, []);
+
+  useEffect(() => {
+    const usersRef = dbRef(db, "users");
+    onValue(usersRef, (snapshot: DataSnapshot) => {
       const data = snapshot.val();
       const usersList: { [key: string]: User } = {};
 
@@ -67,8 +145,10 @@ const Reports: React.FC = () => {
       setUsers(usersList);
     });
 
-    const bookingsRef = dbRef(database, "bookrooms");
-    onValue(bookingsRef, (snapshot) => {
+    const bookingsRef = dbRef(db, "bookrooms");
+    const equipmentsRef = dbRef(db, "bookequipments");
+
+    const handleNewData = (snapshot: DataSnapshot, isRoom: boolean) => {
       const data = snapshot.val();
       const bookingsList: Booking[] = [];
 
@@ -76,83 +156,93 @@ const Reports: React.FC = () => {
         const booking = data[bookingId];
         bookingsList.push({
           id: bookingId,
-          roomName: booking.roomName,
-          studentsSelected: booking.studentsSelected || [],
+          roomName: isRoom ? booking.roomName : undefined,
+          equipmentName: !isRoom ? booking.equipmentName : undefined,
+          equipmentDescription: !isRoom
+            ? booking.equipmentDescription
+            : undefined,
+          studentsSelected: isRoom ? booking.studentsSelected : undefined,
+          equipments: isRoom ? booking.equipments : undefined,
+          equipments1: !isRoom ? booking.equipments : [],
           date: booking.date,
           startTime: booking.startTime || "N/A",
           endTime: booking.endTime || "N/A",
+          tables: isRoom ? booking.tables || [] : [],
           borrowedBy: booking.borrowedBy || "",
         });
       }
 
-      bookingsList.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      setRecentBookings(bookingsList);
-      setLoading(false);
-    });
+      return bookingsList;
+    };
 
-    const checkExpiredBookings = () => {
-      const now = new Date();
-      console.log("Current PC Time:", now.toString());
+    const updateBookings = () => {
+      let allBookings: Booking[] = [];
 
-      recentBookings.forEach((booking) => {
-        const endTime = new Date(`${booking.date}T${booking.endTime}:00`);
-        console.log("Booking End Time:", endTime.toString());
+      onValue(bookingsRef, (snapshot: DataSnapshot) => {
+        const roomBookings = handleNewData(snapshot, true);
+        allBookings = [...allBookings, ...roomBookings];
+      });
 
-        if (now > endTime) {
-          console.log(`Booking ${booking.roomName} has expired.`);
-          setExpiredBookings((prev) => ({
-            ...prev,
-            [booking.id]: booking,
-          }));
+      onValue(equipmentsRef, (snapshot: DataSnapshot) => {
+        const equipmentBookings = handleNewData(snapshot, false);
+        allBookings = [...allBookings, ...equipmentBookings];
 
-          const userConfirmed = window.confirm(
-            `The booking for ${booking.roomName} has expired.\n` +
-              `Date: ${booking.date}\n` +
-              `Start Time: ${formatTime(booking.startTime)}\n` +
-              `End Time: ${formatTime(booking.endTime)}\n` +
-              `Borrowed By: ${
-                users[booking.borrowedBy]?.name || "Unknown"
-              }\n\n` +
-              `Do you want to delete it?`
-          );
-
-          if (userConfirmed) {
-            remove(dbRef(database, `bookrooms/${booking.id}`))
-              .then(() => {
-                console.log(`Booking ${booking.id} has been deleted.`);
-                setRecentBookings((prevBookings) =>
-                  prevBookings.filter((b) => b.id !== booking.id)
-                );
-              })
-              .catch((error) => {
-                console.error("Error deleting booking:", error);
-              });
-          }
-        }
+        // Sort and update the state after fetching all data
+        allBookings.sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setRecentBookings(allBookings);
+        setLoading(false);
       });
     };
 
-    const intervalId = setInterval(checkExpiredBookings, 60000);
-    checkExpiredBookings();
+    updateBookings();
 
-    return () => clearInterval(intervalId);
-  }, [database, recentBookings]);
+    return;
+  }, [db, recentBookings]);
 
-  const handleDeleteExpired = async (id: string) => {
-    const bookingRef = dbRef(database, `bookrooms/${id}`);
-    try {
-      await remove(bookingRef);
-      setExpiredBookings((prev) => {
-        const { [id]: _, ...remaining } = prev;
-        return remaining;
+  useEffect(() => {
+    const fetchTablesData = () => {
+      const bookroomsRef = dbRef(db, "bookrooms");
+
+      onValue(bookroomsRef, (snapshot: DataSnapshot) => {
+        const data = snapshot.val();
+        const tables: { [key: string]: string } = {};
+
+        for (const bookingId in data) {
+          const booking = data[bookingId];
+          // Ensure tables is a string
+          tables[bookingId] =
+            typeof booking.tables === "string" ? booking.tables : "";
+        }
+
+        console.log("Tables Data:", tables); // Debug line
+        setTablesData(tables);
       });
-      console.log("Expired booking deleted");
-    } catch (error) {
-      console.error("Error deleting expired booking:", error);
-    }
-  };
+    };
+
+    fetchTablesData();
+  }, [db]);
+
+  useEffect(() => {
+    const fetchEquipmentDescriptions = () => {
+      const equipmentsRef = dbRef(db, "equipments");
+
+      onValue(equipmentsRef, (snapshot: DataSnapshot) => {
+        const data = snapshot.val();
+        const descriptions: { [key: string]: string } = {};
+
+        for (const key in data) {
+          descriptions[key] = data[key].description || "No Description";
+        }
+
+        console.log("Equipment Descriptions:", descriptions); // Debug line
+        setEquipmentDescriptions(descriptions);
+      });
+    };
+
+    fetchEquipmentDescriptions();
+  }, [db]);
 
   if (loading) {
     return (
@@ -181,7 +271,18 @@ const Reports: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-gray-100 p-4">
+      <aside className="w-full md:w-64 bg-gray-100 p-4 h-screen overflow-y-auto scrollbar-hide">
+        {/* Set height for the sidebar */}
+        <style>
+          {`
+          .scrollbar-hide {
+            scrollbar-width: none; /* Firefox */
+          }
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, and Opera */
+          }
+        `}
+        </style>
         <div className="mb-8 flex justify-center">
           <img
             src={schoolLogo}
@@ -189,8 +290,9 @@ const Reports: React.FC = () => {
             className="h-18 w-16 md:h-18 md:w-18 rounded-full"
           />
         </div>
-        <nav>
+        <nav className="h-full">
           <ul>
+            {/* Existing Dashboard Link */}
             <li className="mb-4">
               <a
                 href="/Dashboard"
@@ -202,155 +304,357 @@ const Reports: React.FC = () => {
             </li>
             <li className="mb-4">
               <a
-                href="/Rooms"
+                href="/BookBorrow"
                 className="flex items-center p-2 hover:bg-gray-300 rounded-md"
               >
-                <img src={roomslogo} alt="Rooms" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Rooms</span>
+                <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Book/Borrow</span>
               </a>
             </li>
+
+            {/* Add option with dropdown */}
             <li className="mb-4">
-              <a
-                href="#"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              <button
+                onClick={() => setShowAddOptions(!showAddOptions)} // Toggle add options
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md w-full text-left"
               >
                 <img
-                  src={equipmentslogo}
-                  alt="Equipments"
+                  src={managedataLogo}
+                  alt="Manage Data"
                   className="h-6 w-6"
                 />
-                <span className="ml-2 text-black font-bold">Equipments</span>
-              </a>
+                <span className="ml-2 text-black font-bold">Manage Data</span>
+                <svg
+                  className={`ml-auto transition-transform ${
+                    showAddOptions ? "transform rotate-180" : ""
+                  }`}
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  width="1.5em"
+                  height="1.5em"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+
+              {/* Conditional rendering of the add options */}
+              {showAddOptions && (
+                <div className="pl-8 pt-3">
+                  <ul>
+                    <li className="mb-4">
+                      <a
+                        href="/Rooms"
+                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                      >
+                        <img src={roomslogo} alt="Rooms" className="h-6 w-6" />
+                        <span className="ml-2 text-black font-bold">Rooms</span>
+                      </a>
+                    </li>
+                    <li className="mb-4">
+                      <a
+                        href="/Equipments"
+                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                      >
+                        <img
+                          src={equipmentslogo}
+                          alt="Equipments"
+                          className="h-6 w-6"
+                        />
+                        <span className="ml-2 text-black font-bold">
+                          Equipments
+                        </span>
+                      </a>
+                    </li>
+                    <li className="mb-4">
+                      <a
+                        href="/Courses"
+                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                      >
+                        <img
+                          src={coursesLogo}
+                          alt="Courses"
+                          className="h-6 w-6"
+                        />
+                        <span className="ml-2 text-black font-bold">
+                          Courses
+                        </span>
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+              )}
             </li>
+
+            {/* Other navigation items */}
             <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
               <a
-                href="/Reports"
+                href="/reports"
                 className="flex items-center p-2 hover:bg-gray-300 rounded-md"
               >
                 <img src={reportslogo} alt="Reports" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Reports</span>
+                <span className="ml-2 text-black font-bold">Transactions</span>
               </a>
             </li>
             <li className="mb-4">
               <a
-                href="#"
+                href="/Reschedule"
                 className="flex items-center p-2 hover:bg-gray-300 rounded-md"
               >
-                <img src={reschedule} alt="Reports" className="h-6 w-6" />
+                <img src={reschedule} alt="Reschedule" className="h-6 w-6" />
                 <span className="ml-2 text-black font-bold">Reschedule</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="/QrCode"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={qrCode} alt="QR" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">QR Code</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="/ReportsTable"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img
+                  src={reportslogo}
+                  alt="Reports Table"
+                  className="h-6 w-6"
+                />
+                <span className="ml-2 text-black font-bold">Reports Table</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="/LoginHistory"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img
+                  src={loginHistoryLogo}
+                  alt="Login History"
+                  className="h-6 w-6"
+                />
+                <span className="ml-2 text-black font-bold">Login History</span>
               </a>
             </li>
           </ul>
         </nav>
       </aside>
-      <main className="flex-1 p-6 bg-white">
+      <main className="flex-1 p-6 bg-white overflow-auto max-h-screen">
         <div className="p-4">
           <div className="flex justify-between mb-4">
             <div className="tabs">
-              <a className="tab tab-bordered tab-active text-black font-bold text-xl">
+              <a
+                onClick={() => setActiveTab("rooms")}
+                className={`tab tab-bordered ${
+                  activeTab === "rooms"
+                    ? "tab-active bg-gray-300 border rounded-md content-center"
+                    : ""
+                } text-xl font-bold text-black`}
+              >
                 Rooms
               </a>
-              <a className="tab tab-bordered text-xl font-bold text-black">
+              <a
+                onClick={() => setActiveTab("equipments")}
+                className={`tab tab-bordered ${
+                  activeTab === "equipments"
+                    ? "tab-active bg-gray-300 rounded-md content-center"
+                    : ""
+                } text-xl font-bold text-black`}
+              >
                 Equipments
               </a>
             </div>
           </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2">
               <div className="card shadow-lg p-4">
-                <h2 className="card-title text-black font-bold">Overview</h2>
-                <div className="h-64 bg-gray-100 flex items-center justify-center mt-7">
-                  <span>Bar Chart</span>
+                <h2 className="card-title text-black font-bold mb-5">
+                  {activeTab === "rooms"
+                    ? "Room Transaction History"
+                    : "Equipment Transaction History"}
+                </h2>
+
+                {/* Transaction History Table */}
+                <div
+                  className="overflow-y-auto text-black"
+                  style={{ maxHeight: "calc(100vh - 200px)" }}
+                >
+                  {currentTransactions.length > 0 ? (
+                    <table className="min-w-full bg-white border">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="py-2 px-4 border-b text-left">Date</th>
+                          <th className="py-2 px-4 border-b text-left">Name</th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Start Time
+                          </th>
+                          <th className="py-2 px-4 border-b text-left">
+                            End Time
+                          </th>
+                          <th className="py-2 px-4 border-b text-left">
+                            Borrowed By
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentTransactions
+                          .filter((transaction) =>
+                            activeTab === "rooms"
+                              ? transaction.type === "room"
+                              : transaction.type === "equipment"
+                          )
+                          .map((transaction) => (
+                            <tr
+                              key={transaction.id}
+                              className="hover:bg-gray-50 text-black"
+                            >
+                              <td className="py-2 px-4 border-b">
+                                {transaction.date}
+                              </td>
+                              <td className="py-2 px-4 border-b">
+                                {transaction.type === "room"
+                                  ? transaction.roomName
+                                  : transaction.equipmentName}
+                              </td>
+                              <td className="py-2 px-4 border-b">
+                                {formatTime(transaction.startTime)}
+                              </td>
+                              <td className="py-2 px-4 border-b">
+                                {formatTime(transaction.endTime)}
+                              </td>
+                              <td className="py-2 px-4 border-b">
+                                {users[transaction.borrowedBy]?.name ||
+                                  "Unknown User"}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-center text-gray-500">
+                      No transactions found.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
             <div className="p-4">
               <div className="card shadow-lg p-4">
                 <h2 className="card-title text-black font-bold text-xl mb-4">
-                  Bookings
+                  {activeTab === "equipments" ? "Borrowings" : "Bookings"}
                 </h2>
                 <ul className="space-y-4">
-                  {recentBookings.map((booking) => (
-                    <li
-                      key={booking.id}
-                      className="flex flex-col border-b pb-4"
-                    >
-                      <div className="flex items-center space-x-4 mb-2">
-                        {users[booking.borrowedBy] ? (
-                          <div className="flex items-center space-x-4">
-                            {users[booking.borrowedBy].photoURL ? (
-                              <img
-                                src={users[booking.borrowedBy].photoURL}
-                                alt={`${
-                                  users[booking.borrowedBy].name
-                                }'s profile`}
-                                className="h-12 w-12 rounded-full border-2 border-gray-300"
-                              />
-                            ) : (
-                              <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                                {users[booking.borrowedBy].name.charAt(0)}
+                  {recentBookings
+                    .filter((booking) =>
+                      activeTab === "rooms"
+                        ? booking.roomName
+                        : booking.equipmentName
+                    )
+                    .map((booking) => (
+                      <li
+                        key={booking.id}
+                        className="flex flex-col border-b pb-4"
+                      >
+                        <div className="flex items-center space-x-4 mb-2">
+                          {users[booking.borrowedBy] ? (
+                            <div className="flex items-center space-x-4">
+                              {users[booking.borrowedBy].photoURL ? (
+                                <img
+                                  src={users[booking.borrowedBy].photoURL}
+                                  alt={`${
+                                    users[booking.borrowedBy].name
+                                  }'s profile`}
+                                  className="h-12 w-12 rounded-full border-2 border-gray-300"
+                                />
+                              ) : (
+                                <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                                  {users[booking.borrowedBy].name.charAt(0)}
+                                </div>
+                              )}
+                              <div className="flex flex-col">
+                                <p className="text-xl text-black font-extrabold">
+                                  {users[booking.borrowedBy].name}
+                                </p>
+                                <p className="text-sm text-black">
+                                  {users[booking.borrowedBy].email}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <p>No user information available</p>
+                          )}
+                        </div>
+                        <div className="flex flex-col ml-4">
+                          <p className="text-xl text-black font-extrabold">
+                            {booking.roomName ||
+                              `${booking.equipmentName || "No equipment name"}${
+                                booking.equipmentDescription
+                                  ? ` (${booking.equipmentDescription})`
+                                  : ""
+                              }`}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            {`${booking.date} ${formatTime(
+                              booking.startTime
+                            )} - ${formatTime(booking.endTime)}`}
+                          </p>
+                          <p className="text-xs text-black">
+                            {activeTab === "rooms"
+                              ? booking.roomName === "IMC/AVR" &&
+                                booking.equipments?.length
+                                ? `Equipments: ${booking.equipments
+                                    .map(
+                                      (item) =>
+                                        equipmentDescriptions[item] || item
+                                    )
+                                    .join(", ")}`
+                                : `Students: ${
+                                    booking.studentsSelected
+                                      ?.map(
+                                        (studentId) =>
+                                          users[studentId]?.name || studentId
+                                      )
+                                      .join(", ") || "N/A"
+                                  }`
+                              : `Equipments: ${booking.equipments1
+                                  ?.map(
+                                    (item) =>
+                                      equipmentDescriptions[item] || item
+                                  )
+                                  .join(", ")}`}
+                          </p>
+                          {activeTab === "rooms" &&
+                            booking.roomName === "Tutoring Room" && (
+                              <div className="">
+                                <p className="text-black text-xs">
+                                  Tables:{" "}
+                                  {tablesData[booking.id]
+                                    ? tablesData[booking.id]
+                                        .split(",")
+                                        .map((table) => table.trim())
+                                        .join(", ")
+                                    : "No tables available"}
+                                </p>
                               </div>
                             )}
-                            <div className="flex flex-col">
-                              <p className="text-xl text-black font-extrabold">
-                                {users[booking.borrowedBy].name}
-                              </p>
-                              <p className="text-sm text-black">
-                                {users[booking.borrowedBy].email}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p>No user information available</p>
-                        )}
-                      </div>
-                      <div className="flex flex-col ml-4">
-                        <p className="text-xl text-black font-extrabold">
-                          {booking.roomName}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {`${booking.date} ${formatTime(
-                            booking.startTime
-                          )} - ${formatTime(booking.endTime)}`}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          Students:{" "}
-                          {booking.studentsSelected
-                            .map(
-                              (studentId) => users[studentId]?.name || studentId
-                            )
-                            .join(", ")}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
+                        </div>
+                      </li>
+                    ))}
                 </ul>
               </div>
             </div>
           </div>
-          {Object.keys(expiredBookings).length > 0 && (
-            <div className="fixed bottom-4 right-4 bg-red-100 border border-red-300 p-4 rounded-lg shadow-lg">
-              <h3 className="text-red-800 font-bold mb-2">Expired Bookings</h3>
-              <ul className="space-y-2">
-                {Object.values(expiredBookings).map((booking) => (
-                  <li
-                    key={booking.id}
-                    className="flex justify-between items-center"
-                  >
-                    <span>{`${booking.roomName} - ${formatTime(
-                      booking.endTime
-                    )}`}</span>
-                    <button
-                      className="bg-red-500 text-white py-1 px-3 rounded"
-                      onClick={() => handleDeleteExpired(booking.id)}
-                    >
-                      OK
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       </main>
     </div>

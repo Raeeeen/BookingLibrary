@@ -7,29 +7,30 @@ import {
   Database,
   get,
 } from "firebase/database";
-import schoolLogo from "../../assets/scclogo.png";
-import dashboardlogo from "../../assets/dashboardlogo.png";
-import historyLogo from "../../assets/reportslogo.png";
-import borrowLogo from "../../assets/borrowicon.png";
-import faqLogo from "../../assets/faqlogo.png";
-import guidelinesLogo from "../../assets/guidelineslogo.png";
+import schoolLogo from "../../../assets/scclogo.png";
+import dashboardlogo from "../../../assets/dashboardlogo.png";
+import historyLogo from "../../../assets/reportslogo.png";
+import borrowLogo from "../../../assets/borrowicon.png";
+import faqLogo from "../../../assets/faqlogo.png";
+import guidelinesLogo from "../../../assets/guidelineslogo.png";
 import { FirebaseApp, initializeApp } from "firebase/app";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import UserSelection from "./BorrowedUserSelection";
-import CourseSelection from "./CourseSelection";
+import UserSelection from "../BorrowedUserSelection";
+import CourseSelection from "./../CourseSelection";
 import { getAuth } from "firebase/auth";
-import EquipmentSelection from "./EquipmentSelection";
+import AddStudentsUserSelection from "../AddStudentsUserSelection";
 
 const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
 };
 
-const BookRoom: React.FC = () => {
+const UserTutoringBookTable: React.FC = () => {
   const location = useLocation();
   const roomTitle = location.state?.roomTitle || "Unknown Room";
+  const tableTitle = location.state?.tableTitle || "Unknown Table";
   const [date, setDate] = useState<Date | null>(null);
 
   const [, setStudents] = useState<string[]>([]);
@@ -55,19 +56,16 @@ const BookRoom: React.FC = () => {
     amPm: "AM",
   });
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [showUserSelection, setShowUserSelection] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
+  const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const handleDateChange = (date: any) => setDate(date);
-  const [equipments, setEquipments] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
-  const [showEquipmentsSelection, setShowEquipmentsSelection] = useState(false);
   const [courses, setCourses] = useState<
     { id: string; name: string; description: string }[]
   >([]); // New state
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [showCourseSelection, setShowCourseSelection] = useState(false);
+  const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
 
   // Firebase configuration
@@ -113,33 +111,6 @@ const BookRoom: React.FC = () => {
     };
 
     fetchUsers();
-  }, [db]);
-
-  useEffect(() => {
-    const fetchEquipments = async () => {
-      const equipmentsRef = dbRef(db, "equipments");
-      const snapshot = await get(equipmentsRef);
-      const data = snapshot.val();
-      const fetchedEquipments: {
-        id: string;
-        name: string;
-        description: string;
-      }[] = [];
-
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchedEquipments.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
-        }
-      }
-
-      setEquipments(fetchedEquipments);
-    };
-
-    fetchEquipments();
   }, [db]);
 
   useEffect(() => {
@@ -204,8 +175,8 @@ const BookRoom: React.FC = () => {
       return;
     }
 
-    if (selectedEquipments.length === 0) {
-      toast.error("Please select at least one equipments.");
+    if (selectedStudents.length === 0) {
+      toast.error("Please select at least one students.");
       return;
     }
 
@@ -313,6 +284,14 @@ const BookRoom: React.FC = () => {
       return;
     }
 
+    // Check if the booking is exactly one hour
+    const duration =
+      (endTimeDateUTC8.getTime() - startTimeDateUTC8.getTime()) / 60000; // duration in minutes
+    if (duration !== 60) {
+      toast.error("You can only book for 1h.");
+      return;
+    }
+
     // Check if the new booking overlaps with any existing bookings
     const isOverlapping = bookedSlots.some((slot) => {
       const slotStart = new Date(
@@ -381,7 +360,7 @@ const BookRoom: React.FC = () => {
     const bookingData = {
       roomName: roomTitle,
       roomId: roomId,
-      equipments: selectedEquipments,
+      studentsSelected: selectedStudents,
       date: formattedDate,
       startTime: `${startHours24.toString().padStart(2, "0")}:${startMinutes24
         .toString()
@@ -392,6 +371,7 @@ const BookRoom: React.FC = () => {
       borrowedBy: selectedUsers,
       purpose: purpose,
       department: department,
+      tables: tableTitle,
       course: validCourses,
       subject: subject,
       gender: gender,
@@ -404,17 +384,9 @@ const BookRoom: React.FC = () => {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
 
-      // Update equipment availability to false without removing other fields
-      for (const equipmentId of selectedEquipments) {
-        const equipmentRef = dbRef(db, `equipments/${equipmentId}`);
-        const equipmentSnapshot = await get(equipmentRef);
-        const equipmentData = equipmentSnapshot.val();
-        await set(equipmentRef, { ...equipmentData, availability: false });
-      }
-
       toast.success("Waiting for the Admin confirmation!");
       setTimeout(() => {
-        navigate("/UserDashboard");
+        navigate("/UserBook");
       }, 2000);
 
       // Clear form fields after successful submission
@@ -425,11 +397,10 @@ const BookRoom: React.FC = () => {
       setPurpose("");
       setDepartment("");
       setCourses([]);
-      setSubject("");
       setGender("");
+      setSubject("");
       setStartTime({ hours: "0", minutes: "00", amPm: "AM" });
       setEndTime({ hours: "0", minutes: "00", amPm: "AM" });
-      setSelectedEquipments([]); // Reset equipments selection
     } catch (error) {
       console.error("Error booking room:", error);
       toast.error(
@@ -462,14 +433,15 @@ const BookRoom: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => setEndTime({ ...endTime, [e.target.name]: e.target.value });
 
-  const handleSelectUsers = (selected: string[]) => {
+  // Functions to handle user selection
+  const handleSelectBorrowedBy = (selected: string[]) => {
     setSelectedUsers(selected);
-    setShowUserSelection(false); // Close the user selection modal
+    setShowBorrowedBySelection(false);
   };
 
-  const handleSelectEquipments = (selected: string[]) => {
-    setSelectedEquipments(selected);
-    setShowEquipmentsSelection(false);
+  const handleSelectStudents = (selected: string[]) => {
+    setSelectedStudents(selected);
+    setShowStudentsSelection(false);
   };
 
   const handleSelectCourses = (selected: string[]) => {
@@ -477,7 +449,9 @@ const BookRoom: React.FC = () => {
     setShowCourseSelection(false);
   };
 
-  const openEquipmentsModal = () => setShowEquipmentsSelection(true);
+  // Handle show modals
+  const openBorrowedByModal = () => setShowBorrowedBySelection(true);
+  const openStudentsModal = () => setShowStudentsSelection(true);
   const openCourseModal = () => setShowCourseSelection(true);
 
   // Calculate the minimum date for booking (3 days from today)
@@ -510,7 +484,7 @@ const BookRoom: React.FC = () => {
                 href="/UserBookBorrow"
                 className="flex items-center p-2 hover:bg-gray-300 rounded-md"
               >
-                <img src={borrowLogo} alt="Dashboard" className="h-6 w-6" />
+                <img src={borrowLogo} alt="Borrow" className="h-6 w-6" />
                 <span className="ml-2 text-black font-bold">Book/Borrow</span>
               </a>
             </li>
@@ -519,7 +493,11 @@ const BookRoom: React.FC = () => {
                 href="/UserTransactionHistory"
                 className="flex items-center p-2 hover:bg-gray-300 rounded-md"
               >
-                <img src={historyLogo} alt="Dashboard" className="h-6 w-6" />
+                <img
+                  src={historyLogo}
+                  alt="Transaction History"
+                  className="h-6 w-6"
+                />
                 <span className="ml-2 text-black font-bold">
                   Transaction History
                 </span>
@@ -557,6 +535,9 @@ const BookRoom: React.FC = () => {
             >
               <h2 className="text-center text-2xl font-bold mb-6 text-black">
                 {roomTitle}
+              </h2>
+              <h2 className="text-center text-2xl font-bold mb-6 text-black">
+                {tableTitle}
               </h2>
               <div className="mb-4">
                 <label
@@ -679,6 +660,13 @@ const BookRoom: React.FC = () => {
                 >
                   Booked By:
                 </label>
+                <button
+                  type="button"
+                  onClick={openBorrowedByModal}
+                  className="p-2 bg-black text-white rounded"
+                >
+                  Select Students
+                </button>
                 {selectedUsers.length > 0 && (
                   <ul className="mt-3">
                     {selectedUsers.map((user, index) => (
@@ -697,24 +685,23 @@ const BookRoom: React.FC = () => {
                   className="block text-black text-sm font-bold mb-2 mt-2"
                   htmlFor="students"
                 >
-                  Add Equipments:
+                  Add Students:
                 </label>
                 <button
                   type="button"
-                  onClick={openEquipmentsModal}
+                  onClick={openStudentsModal}
                   className="p-2 bg-black text-white rounded"
                 >
-                  Select Equipments
+                  Select Students
                 </button>
-                {selectedEquipments.length > 0 && (
+                {selectedStudents.length > 0 && (
                   <ul className="mt-3">
-                    {selectedEquipments.map((equipmentId, index) => (
+                    {selectedStudents.map((student, index) => (
                       <li
                         key={index}
                         className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                       >
-                        {equipments.find((u) => u.id === equipmentId)
-                          ?.description || equipmentId}
+                        {users.find((u) => u.id === student)?.name || student}
                       </li>
                     ))}
                   </ul>
@@ -731,8 +718,8 @@ const BookRoom: React.FC = () => {
                 <DatePicker
                   id="date"
                   selected={date}
-                  onChange={handleDateChange}
                   minDate={minBookingDate} // Set the minimum selectable date
+                  onChange={handleDateChange}
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                   dateFormat="yyyy-MM-dd"
                 />
@@ -833,23 +820,24 @@ const BookRoom: React.FC = () => {
           </div>
         </div>
       </main>
-      {showUserSelection && (
+      {/* User selection modals */}
+      {showBorrowedBySelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <UserSelection
             users={[users.find((user) => user.id === currentUserId)!]} // Pass only the current user
             selectedUsers={selectedUsers}
-            onSelect={handleSelectUsers}
-            onCancel={() => setShowUserSelection(false)}
+            onSelect={handleSelectBorrowedBy}
+            onCancel={() => setShowBorrowedBySelection(false)}
           />
         </div>
       )}
-      {showEquipmentsSelection && (
+      {showStudentsSelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <EquipmentSelection
-            equipments={equipments}
-            selectedEquipments={selectedEquipments}
-            onSelect={handleSelectEquipments}
-            onCancel={() => setShowEquipmentsSelection(false)}
+          <AddStudentsUserSelection
+            users={users}
+            selectedUsers={selectedStudents}
+            onSelect={handleSelectStudents}
+            onCancel={() => setShowStudentsSelection(false)}
           />
         </div>
       )}
@@ -869,4 +857,4 @@ const BookRoom: React.FC = () => {
   );
 };
 
-export default BookRoom;
+export default UserTutoringBookTable;

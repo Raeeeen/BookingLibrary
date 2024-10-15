@@ -12,19 +12,19 @@ import historyLogo from "../../assets/reportslogo.png";
 import borrowLogo from "../../assets/borrowicon.png";
 import faqLogo from "../../assets/faqlogo.png";
 import guidelinesLogo from "../../assets/guidelineslogo.png";
-import Modal from "./Modal";
 import { useNavigate } from "react-router-dom";
+import Modal from "./Modal";
 
-// Define a type for the RoomCard props
-interface RoomCardProps {
+// Define a type for the EquipmentsCard props
+interface EquipmentsCardProps {
   title: string;
   image: string;
   onBook: () => void;
-  onViewBookings?: () => void; // Make this prop optional
+  onViewBookings: () => void;
   available: boolean; // New prop to indicate availability
 }
 
-interface Room {
+interface Equipments {
   title: string;
   imageUrl: string;
   available: boolean;
@@ -36,16 +36,16 @@ interface Booking {
   endTime: string;
 }
 
-const UserAvailableRoom: React.FC = () => {
+const UserAvailableEquipments: React.FC = () => {
   const [filter, setFilter] = useState<"Available" | "Not Available">(
     "Available"
   );
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [selectedRoomBookings, setSelectedRoomBookings] = useState<Booking[]>(
-    []
-  );
+  const [equipments, setEquipments] = useState<Equipments[]>([]);
+  const [selectedEquipmentBookings, setSelectedEquipmentBookings] = useState<
+    Booking[]
+  >([]);
   const [isModalOpen, setIsModalOpen] = useState(false); // Modal open state
-  const [currentRoomTitle, setCurrentRoomTitle] = useState("");
+  const [currentEquipmentTitle, setCurrentEquipmentTitle] = useState("");
   const navigate = useNavigate();
 
   // Firebase configuration
@@ -64,23 +64,23 @@ const UserAvailableRoom: React.FC = () => {
   const db: Database = getDatabase(app);
 
   useEffect(() => {
-    const roomsRef = dbRef(db, "rooms");
+    const equipmentRef = dbRef(db, "equipments");
 
-    onValue(roomsRef, (snapshot) => {
+    onValue(equipmentRef, (snapshot) => {
       const data = snapshot.val();
-      const roomArray: Room[] = [];
+      const equipmentsArray: Equipments[] = [];
 
       for (const key in data) {
         const room = data[key];
-        roomArray.push({
+        equipmentsArray.push({
           title: room.description,
           imageUrl: room.imageUrl,
           available: room.availability,
         });
       }
 
-      console.log("Fetched rooms:", roomArray);
-      setRooms(roomArray);
+      console.log("Fetched equipments:", equipmentsArray);
+      setEquipments(equipmentsArray);
     });
   }, [db]);
 
@@ -94,62 +94,62 @@ const UserAvailableRoom: React.FC = () => {
     return `${hour.toString().padStart(2, "0")}:${minute} ${amPm}`;
   };
 
-  const handleBookClick = (roomTitle: string) => {
+  const handleBookClick = (equipmentTitle: string) => {
     // Use a regular expression to match "IMC/AVR" regardless of slashes
-    if (/IMC\/?AVR/.test(roomTitle)) {
-      navigate("/UserImcAvr", { state: { roomTitle } });
-    } else if (/Tutoring Room/.test(roomTitle)) {
-      navigate("/UserTutoringAvailableTable", { state: { roomTitle } });
+    if (/IMC\/?AVR/.test(equipmentTitle)) {
+      navigate("/ImcAvr", { state: { equipmentTitle } });
     } else {
-      navigate("/UserBookRoom", { state: { roomTitle } });
+      navigate("/UserBookEquipments", { state: { equipmentTitle } });
     }
   };
 
   // Function to handle "View Bookings" click
-  const handleViewBookingsClick = (roomTitle: string) => {
-    // Fetch booking data for the given roomTitle from Firebase
-    const bookingsRef = dbRef(db, "bookrooms");
-    onValue(bookingsRef, (snapshot) => {
-      const data = snapshot.val();
-      const bookings: Booking[] = [];
+  const handleViewBookingsClick = (equipmentTitle: string) => {
+    // Fetch booking data for the given equipmentTitle from Firebase
+    const bookingsRef = dbRef(db, "bookequipments");
+    onValue(
+      bookingsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        const bookings: Booking[] = [];
 
-      for (const key in data) {
-        const booking = data[key];
-        if (booking.roomName === roomTitle) {
-          bookings.push({
-            date: booking.date,
-            startTime: booking.startTime,
-            endTime: booking.endTime,
-          });
+        for (const key in data) {
+          const booking = data[key];
+          // Update the condition to match 'equipmentName' instead of 'equipmentTitle'
+          if (booking.equipmentName === equipmentTitle) {
+            bookings.push({
+              date: booking.date,
+              startTime: booking.startTime,
+              endTime: booking.endTime,
+            });
+          }
         }
-      }
 
-      // Set the bookings in state and open the modal
-      setSelectedRoomBookings(bookings);
-      setCurrentRoomTitle(roomTitle);
-      setIsModalOpen(true);
-    });
+        console.log(`Fetched bookings for ${equipmentTitle}:`, bookings);
+        setSelectedEquipmentBookings(bookings);
+        setCurrentEquipmentTitle(equipmentTitle);
+        setIsModalOpen(true);
+      },
+      (error) => {
+        console.error("Error fetching bookings:", error);
+        // Optionally, set an error state here
+      }
+    );
   };
 
   // Function to close the modal
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedRoomBookings([]);
+    setSelectedEquipmentBookings([]);
   };
 
-  // Helper function to determine if "View Bookings" should be shown
-  const shouldShowViewBookings = (roomTitle: string): boolean => {
-    const excludedRooms = ["Tutoring Room"];
-    return !excludedRooms.includes(roomTitle);
-  };
-
-  // Update the RoomCard component to use the defined types
-  const RoomCard: React.FC<RoomCardProps> = ({
+  // Update the EquipmentsCard component to use the defined types
+  const EquipmentsCard: React.FC<EquipmentsCardProps> = ({
     title,
     image,
     onBook,
     onViewBookings,
-    available,
+    available, // Receive the availability prop
   }) => (
     <div className="card bg-white shadow-xl">
       <figure>
@@ -165,21 +165,18 @@ const UserAvailableRoom: React.FC = () => {
             }`}
             disabled={!available} // Disable the button if not available
           >
-            Book
+            Borrow
           </button>
-          {/* Conditionally render the "View Bookings" button */}
-          {onViewBookings && (
-            <button onClick={onViewBookings} className="btn btn-accent">
-              View Bookings
-            </button>
-          )}
+          <button onClick={onViewBookings} className="btn btn-accent">
+            View Bookings
+          </button>
         </div>
       </div>
     </div>
   );
 
-  const filteredRooms = rooms.filter((room) =>
-    filter === "Available" ? room.available : !room.available
+  const filteredEquipments = equipments.filter((equipments) =>
+    filter === "Available" ? equipments.available : !equipments.available
   );
 
   return (
@@ -248,7 +245,7 @@ const UserAvailableRoom: React.FC = () => {
       </aside>
       <main className="flex-1 p-6 bg-white h-screen overflow-y-auto">
         <div className="container mx-auto p-4">
-          <h1 className="text-2xl font-bold mb-4 text-black">Rooms</h1>
+          <h1 className="text-2xl font-bold mb-4 text-black">Equipments</h1>
           <div className="mb-4 flex space-x-4">
             <button
               className={`btn ${
@@ -267,19 +264,15 @@ const UserAvailableRoom: React.FC = () => {
               Not Available
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {filteredRooms.map((room, index) => (
-              <RoomCard
+          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-4 gap-4">
+            {filteredEquipments.map((equipment, index) => (
+              <EquipmentsCard
                 key={index}
-                title={room.title}
-                image={room.imageUrl}
-                onBook={() => handleBookClick(room.title)}
-                onViewBookings={
-                  shouldShowViewBookings(room.title)
-                    ? () => handleViewBookingsClick(room.title)
-                    : undefined
-                }
-                available={room.available} // Pass the availability prop
+                title={equipment.title}
+                image={equipment.imageUrl}
+                onBook={() => handleBookClick(equipment.title)}
+                onViewBookings={() => handleViewBookingsClick(equipment.title)} // Pass the view bookings function
+                available={equipment.available} // Pass the availability prop
               />
             ))}
           </div>
@@ -288,10 +281,10 @@ const UserAvailableRoom: React.FC = () => {
       {/* Modal to show bookings */}
       <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
         <h2 className="text-2xl font-bold mb-4 text-center text-black">
-          {currentRoomTitle} Bookings
+          {currentEquipmentTitle} Bookings
         </h2>
-        {selectedRoomBookings.length > 0 ? (
-          selectedRoomBookings.map((booking, index) => (
+        {selectedEquipmentBookings.length > 0 ? (
+          selectedEquipmentBookings.map((booking, index) => (
             <div
               key={index}
               className="bg-gray-100 p-4 rounded-lg shadow mb-4 border border-gray-300 "
@@ -324,4 +317,4 @@ const UserAvailableRoom: React.FC = () => {
   );
 };
 
-export default UserAvailableRoom;
+export default UserAvailableEquipments;

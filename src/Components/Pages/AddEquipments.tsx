@@ -4,8 +4,8 @@ import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
 import reportslogo from "../../assets/reportslogo.png";
 import reschedule from "../../assets/rescheduling.png";
-import loginHistoryLogo from "../../assets/loginhistory.png";
 import coursesLogo from "../../assets/courses.png";
+import loginHistoryLogo from "../../assets/loginhistory.png";
 import qrCode from "../../assets/qrcodelogo.png";
 import { initializeApp } from "firebase/app";
 import { getDatabase, push, ref as dbRef, set } from "firebase/database";
@@ -22,7 +22,7 @@ import { useNavigate } from "react-router-dom";
 import borrowLogo from "../../assets/borrowicon.png";
 import managedataLogo from "../../assets/managelogo.png";
 
-function AddRoom() {
+function AddEquipments() {
   const [description, setDescription] = useState<string>("");
   const [image, setImage] = useState<File | null>(null);
   const navigate = useNavigate();
@@ -56,16 +56,16 @@ function AddRoom() {
         // Upload image to Firebase Storage
         const imageStorageRef = storageRef(
           storage,
-          `rooms/${sanitizedDescription}/${image.name}`
+          `equipments/${sanitizedDescription}/${image.name}`
         );
         await uploadBytes(imageStorageRef, image);
         imageUrl = await getDownloadURL(imageStorageRef);
       }
 
       // Add room details to Realtime Database
-      const roomsRef = dbRef(db, "rooms");
-      const newRoomRef = push(roomsRef);
-      await set(newRoomRef, {
+      const equipmentsref = dbRef(db, "equipments");
+      const newEquipmentsref = push(equipmentsref);
+      await set(newEquipmentsref, {
         description,
         imageUrl,
         availability,
@@ -74,13 +74,13 @@ function AddRoom() {
       // Reset form
       setDescription("");
       setImage(null);
-      toast.success("Room added successful!");
+      toast.success("Equipment added successful!");
       setTimeout(() => {
-        navigate("/Rooms");
+        navigate("/Equipments");
       }, 2000);
     } catch (error) {
-      console.error("Error adding room: ", error);
-      alert("Error adding room, please try again.");
+      console.error("Error adding equipment: ", error);
+      alert("Error adding equipment, please try again.");
     }
   };
 
@@ -163,7 +163,7 @@ function AddRoom() {
               {showAddOptions && (
                 <div className="pl-8 pt-3">
                   <ul>
-                    <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+                    <li className="mb-4">
                       <a
                         href="/Rooms"
                         className="flex items-center p-2 hover:bg-gray-300 rounded-md"
@@ -172,7 +172,7 @@ function AddRoom() {
                         <span className="ml-2 text-black font-bold">Rooms</span>
                       </a>
                     </li>
-                    <li className="mb-4">
+                    <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
                       <a
                         href="/Equipments"
                         className="flex items-center p-2 hover:bg-gray-300 rounded-md"
@@ -268,15 +268,15 @@ function AddRoom() {
         <div className="flex justify-center items-center min-h-full">
           <div className="w-full max-w-md p-8 space-y-6 bg-white rounded shadow-lg">
             <h1 className="text-2xl font-bold text-center text-black">
-              New Room
+              New Equipments
             </h1>
-            <p className="text-center text-gray-500 mt-0">Create room</p>
+            <p className="text-center text-gray-500 mt-0">Add Equipments</p>
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm font-bold text-black">
-                  Room details
+                  Equipment details
                 </label>
-                <p className="text-gray-500">Provide room information</p>
+                <p className="text-gray-500">Provide equipment information</p>
               </div>
               <div>
                 <label
@@ -288,7 +288,7 @@ function AddRoom() {
                 <input
                   type="text"
                   id="description"
-                  placeholder="e.g. Conference Room"
+                  placeholder="e.g. Extension Wire"
                   className="input input-bordered w-full border-gray-400 bg-white text-black mt-2"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -329,4 +329,4 @@ function AddRoom() {
   );
 }
 
-export default AddRoom;
+export default AddEquipments;

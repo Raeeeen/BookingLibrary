@@ -1,32 +1,37 @@
+import { useEffect, useState } from "react";
+import { ref, get, getDatabase, remove } from "firebase/database";
 import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
 import reportslogo from "../../assets/reportslogo.png";
+import qrCode from "../../assets/qrcodelogo.png";
 import reschedule from "../../assets/rescheduling.png";
 import loginHistoryLogo from "../../assets/loginhistory.png";
 import coursesLogo from "../../assets/courses.png";
-import qrCode from "../../assets/qrcodelogo.png";
-import { initializeApp } from "firebase/app";
-import { getDatabase, push, ref as dbRef, set } from "firebase/database";
-import {
-  getDownloadURL,
-  ref as storageRef,
-  uploadBytes,
-} from "firebase/storage";
-import { getStorage } from "firebase/storage";
-import React, { useState } from "react";
-import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { useNavigate } from "react-router-dom";
+import { initializeApp } from "firebase/app";
+import Lottie from "lottie-react";
+import loadingAnimation from "../../assets/loadinganimation2.json";
 import borrowLogo from "../../assets/borrowicon.png";
 import managedataLogo from "../../assets/managelogo.png";
 
-function AddRoom() {
-  const [description, setDescription] = useState<string>("");
-  const [image, setImage] = useState<File | null>(null);
-  const navigate = useNavigate();
-  const [showAddOptions, setShowAddOptions] = useState(true);
+interface LoginHistoryEntry {
+  userId: string;
+  currentDate: string;
+  currentTime: string;
+}
+
+interface User {
+  email: string;
+}
+
+function LoginHistory() {
+  const [loginHistory, setLoginHistory] = useState<LoginHistoryEntry[]>([]);
+  const [users, setUsers] = useState<{ [key: string]: User }>({});
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false); // State to manage modal visibility
+  const [showAddOptions, setShowAddOptions] = useState(false);
 
   const firebaseConfig = {
     apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
@@ -38,51 +43,81 @@ function AddRoom() {
     appId: "1:977659880455:web:f1c2a95baaace7f2caf6a2",
   };
 
-  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
-  const storage = getStorage(app);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      let imageUrl = "";
-      let availability = true;
+  useEffect(() => {
+    const fetchLoginHistory = async () => {
+      try {
+        const loginData: LoginHistoryEntry[] = [];
 
-      if (image && description) {
-        // Sanitize description for use in a path
-        const sanitizedDescription = description.replace(/[^a-zA-Z0-9]/g, "_");
+        const loginHistorySnapshot = await get(ref(db, `loginhistory`));
+        if (loginHistorySnapshot.exists()) {
+          const allLoginHistories = loginHistorySnapshot.val();
 
-        // Upload image to Firebase Storage
-        const imageStorageRef = storageRef(
-          storage,
-          `rooms/${sanitizedDescription}/${image.name}`
-        );
-        await uploadBytes(imageStorageRef, image);
-        imageUrl = await getDownloadURL(imageStorageRef);
+          for (const loginId in allLoginHistories) {
+            const loginHistory = allLoginHistories[loginId];
+            const { currentDate, currentTime, userid } = loginHistory;
+            loginData.push({
+              userId: userid,
+              currentDate,
+              currentTime,
+            });
+          }
+        } else {
+          console.log("No login history found in the database.");
+        }
+
+        setLoginHistory(loginData);
+      } catch (error) {
+        console.error("Error fetching login history:", error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      // Add room details to Realtime Database
-      const roomsRef = dbRef(db, "rooms");
-      const newRoomRef = push(roomsRef);
-      await set(newRoomRef, {
-        description,
-        imageUrl,
-        availability,
-      });
+    const fetchUsers = async () => {
+      try {
+        const usersSnapshot = await get(ref(db, "users"));
+        if (usersSnapshot.exists()) {
+          const allUsers = usersSnapshot.val();
+          setUsers(allUsers);
+        } else {
+          console.log("No users found in the database.");
+        }
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    };
 
-      // Reset form
-      setDescription("");
-      setImage(null);
-      toast.success("Room added successful!");
-      setTimeout(() => {
-        navigate("/Rooms");
-      }, 2000);
+    setLoading(true);
+    fetchUsers();
+    fetchLoginHistory();
+  }, []);
+
+  // Function to clear login history
+  const clearLoginHistory = async () => {
+    try {
+      const loginHistoryRef = ref(db, "loginhistory");
+      await remove(loginHistoryRef);
+      setLoginHistory([]);
+      console.log("Login history cleared successfully.");
     } catch (error) {
-      console.error("Error adding room: ", error);
-      alert("Error adding room, please try again.");
+      console.error("Error clearing login history:", error);
+    } finally {
+      setIsModalOpen(false); // Close modal after clearing history
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-16 h-16">
+          <Lottie animationData={loadingAnimation} loop={true} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -163,7 +198,7 @@ function AddRoom() {
               {showAddOptions && (
                 <div className="pl-8 pt-3">
                   <ul>
-                    <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+                    <li className="mb-4">
                       <a
                         href="/Rooms"
                         className="flex items-center p-2 hover:bg-gray-300 rounded-md"
@@ -248,7 +283,7 @@ function AddRoom() {
                 <span className="ml-2 text-black font-bold">Reports Table</span>
               </a>
             </li>
-            <li className="mb-4">
+            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
               <a
                 href="/LoginHistory"
                 className="flex items-center p-2 hover:bg-gray-300 rounded-md"
@@ -264,69 +299,63 @@ function AddRoom() {
           </ul>
         </nav>
       </aside>
-      <main className="flex-1 p-6 bg-white">
-        <div className="flex justify-center items-center min-h-full">
-          <div className="w-full max-w-md p-8 space-y-6 bg-white rounded shadow-lg">
-            <h1 className="text-2xl font-bold text-center text-black">
-              New Room
-            </h1>
-            <p className="text-center text-gray-500 mt-0">Create room</p>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div>
-                <label className="block text-sm font-bold text-black">
-                  Room details
-                </label>
-                <p className="text-gray-500">Provide room information</p>
-              </div>
-              <div>
-                <label
-                  className="block text-sm font-bold text-black"
-                  htmlFor="description"
-                >
-                  Description
-                </label>
-                <input
-                  type="text"
-                  id="description"
-                  placeholder="e.g. Conference Room"
-                  className="input input-bordered w-full border-gray-400 bg-white text-black mt-2"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-              <div>
-                <label
-                  className="block text-sm font-bold text-black"
-                  htmlFor="image"
-                >
-                  Image
-                </label>
-                <input
-                  type="file"
-                  id="image"
-                  className="block w-full mt-2 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:bg-gray-700"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setImage(e.target.files[0]);
-                    }
-                  }}
-                />
-              </div>
-              <div>
-                <button
-                  type="submit"
-                  className="btn btn-black w-full text-white"
-                >
-                  Submit
-                </button>
-              </div>
-            </form>
+      <main className="flex-1 p-6 bg-white overflow-auto max-h-screen text-black">
+        <h1 className="text-2xl font-bold mb-4 text-black">Login History</h1>
+        <button
+          onClick={() => setIsModalOpen(true)} // Open the modal on button click
+          className="mb-4 bg-red-500 text-white py-1 px-3 rounded hover:bg-red-600"
+        >
+          Clear Login History
+        </button>
+
+        <table className="min-w-full bg-white border border-gray-200">
+          <thead>
+            <tr className="bg-gray-100 border-b">
+              <th className="text-left p-4">Email</th>
+              <th className="text-left p-4">Login Date</th>
+              <th className="text-left p-4">Login Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loginHistory.map((record, index) => (
+              <tr key={index} className="border-b hover:bg-gray-50">
+                <td className="p-4">
+                  {users[record.userId]?.email || "Unknown"}{" "}
+                </td>
+                <td className="p-4">{record.currentDate}</td>
+                <td className="p-4">{record.currentTime}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </main>
+
+      {/* Confirmation Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 text-black">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm">
+            <h2 className="text-lg font-bold mb-4">
+              Do you want to clear login history?
+            </h2>
+            <div className="flex justify-end">
+              <button
+                onClick={clearLoginHistory} // Call function to clear login history
+                className="py-1 px-3 bg-black text-white rounded hover:bg-red-600 font-bold"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setIsModalOpen(false)} // Close modal
+                className="ml-4 py-1 px-3 bg-gray-300 rounded hover:bg-gray-400 font-bold"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
-      </main>
-      <ToastContainer />
+      )}
     </div>
   );
 }
 
-export default AddRoom;
+export default LoginHistory;

@@ -6,28 +6,29 @@ import {
   onValue,
   Database,
 } from "firebase/database";
-import schoolLogo from "../../assets/scclogo.png";
-import dashboardlogo from "../../assets/dashboardlogo.png";
-import historyLogo from "../../assets/reportslogo.png";
-import borrowLogo from "../../assets/borrowicon.png";
-import faqLogo from "../../assets/faqlogo.png";
-import guidelinesLogo from "../../assets/guidelineslogo.png";
-import Modal from "./Modal";
+import schoolLogo from "../../../assets/scclogo.png";
+import dashboardlogo from "../../../assets/dashboardlogo.png";
+import historyLogo from "../../../assets/reportslogo.png";
+import borrowLogo from "../../../assets/borrowicon.png";
+import faqLogo from "../../../assets/faqlogo.png";
+import guidelinesLogo from "../../../assets/guidelineslogo.png";
+import Modal from "./../Modal";
 import { useNavigate } from "react-router-dom";
 
-// Define a type for the RoomCard props
-interface RoomCardProps {
+// Define a type for the TableCard props
+interface TableCardProps {
   title: string;
   image: string;
   onBook: () => void;
-  onViewBookings?: () => void; // Make this prop optional
+  onViewBookings: () => void;
   available: boolean; // New prop to indicate availability
 }
 
-interface Room {
+interface Table {
   title: string;
   imageUrl: string;
   available: boolean;
+  room: string;
 }
 
 interface Booking {
@@ -36,16 +37,17 @@ interface Booking {
   endTime: string;
 }
 
-const UserAvailableRoom: React.FC = () => {
+const UserTutoringAvailableTable: React.FC = () => {
   const [filter, setFilter] = useState<"Available" | "Not Available">(
     "Available"
   );
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
   const [selectedRoomBookings, setSelectedRoomBookings] = useState<Booking[]>(
     []
   );
   const [isModalOpen, setIsModalOpen] = useState(false); // Modal open state
   const [currentRoomTitle, setCurrentRoomTitle] = useState("");
+  const roomTitle = "Tutoring Room";
   const navigate = useNavigate();
 
   // Firebase configuration
@@ -64,25 +66,29 @@ const UserAvailableRoom: React.FC = () => {
   const db: Database = getDatabase(app);
 
   useEffect(() => {
-    const roomsRef = dbRef(db, "rooms");
+    const tablesRef = dbRef(db, "tables");
 
-    onValue(roomsRef, (snapshot) => {
+    onValue(tablesRef, (snapshot) => {
       const data = snapshot.val();
-      const roomArray: Room[] = [];
+      const tableArray: Table[] = [];
 
       for (const key in data) {
-        const room = data[key];
-        roomArray.push({
-          title: room.description,
-          imageUrl: room.imageUrl,
-          available: room.availability,
-        });
+        const table = data[key];
+        if (table.room === roomTitle) {
+          // Filter for Collaboratory Room
+          tableArray.push({
+            title: table.description,
+            imageUrl: table.imageUrl,
+            available: table.availability,
+            room: table.room, // Ensure room is captured
+          });
+        }
       }
 
-      console.log("Fetched rooms:", roomArray);
-      setRooms(roomArray);
+      console.log("Fetched tables:", tableArray);
+      setTables(tableArray);
     });
-  }, [db]);
+  }, [db, roomTitle]);
 
   // Helper function to format time to 12-hour format with AM/PM
   const formatTime = (time: string): string => {
@@ -94,41 +100,46 @@ const UserAvailableRoom: React.FC = () => {
     return `${hour.toString().padStart(2, "0")}:${minute} ${amPm}`;
   };
 
-  const handleBookClick = (roomTitle: string) => {
-    // Use a regular expression to match "IMC/AVR" regardless of slashes
-    if (/IMC\/?AVR/.test(roomTitle)) {
-      navigate("/UserImcAvr", { state: { roomTitle } });
-    } else if (/Tutoring Room/.test(roomTitle)) {
-      navigate("/UserTutoringAvailableTable", { state: { roomTitle } });
-    } else {
-      navigate("/UserBookRoom", { state: { roomTitle } });
-    }
+  const handleBookClick = (roomTitle: string, tableTitle: string) => {
+    navigate("/UserTutoringBookTable", { state: { roomTitle, tableTitle } });
   };
 
-  // Function to handle "View Bookings" click
-  const handleViewBookingsClick = (roomTitle: string) => {
-    // Fetch booking data for the given roomTitle from Firebase
-    const bookingsRef = dbRef(db, "bookrooms");
-    onValue(bookingsRef, (snapshot) => {
-      const data = snapshot.val();
-      const bookings: Booking[] = [];
+  const handleViewBookingsClick = (tableTitle: string) => {
+    const bookingsRef = dbRef(db, "bookrooms"); // Ensure you're referencing 'bookrooms'
 
-      for (const key in data) {
-        const booking = data[key];
-        if (booking.roomName === roomTitle) {
-          bookings.push({
-            date: booking.date,
-            startTime: booking.startTime,
-            endTime: booking.endTime,
-          });
+    onValue(
+      bookingsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        const bookings: Booking[] = [];
+
+        if (data) {
+          for (const key in data) {
+            const booking = data[key];
+            // Check if both roomName and tables match
+            if (
+              booking.roomName === roomTitle &&
+              booking.tables === tableTitle
+            ) {
+              bookings.push({
+                date: booking.date,
+                startTime: booking.startTime,
+                endTime: booking.endTime,
+              });
+            }
+          }
         }
-      }
 
-      // Set the bookings in state and open the modal
-      setSelectedRoomBookings(bookings);
-      setCurrentRoomTitle(roomTitle);
-      setIsModalOpen(true);
-    });
+        // Set the bookings in state and open the modal
+        setSelectedRoomBookings(bookings);
+        setCurrentRoomTitle(tableTitle); // Updated to tableTitle
+        setIsModalOpen(true);
+      },
+      (error) => {
+        console.error("Error fetching bookings:", error);
+        // Optionally, display an error message to the user
+      }
+    );
   };
 
   // Function to close the modal
@@ -137,14 +148,8 @@ const UserAvailableRoom: React.FC = () => {
     setSelectedRoomBookings([]);
   };
 
-  // Helper function to determine if "View Bookings" should be shown
-  const shouldShowViewBookings = (roomTitle: string): boolean => {
-    const excludedRooms = ["Tutoring Room"];
-    return !excludedRooms.includes(roomTitle);
-  };
-
-  // Update the RoomCard component to use the defined types
-  const RoomCard: React.FC<RoomCardProps> = ({
+  // Update the TableCard component to use the defined types
+  const TableCard: React.FC<TableCardProps> = ({
     title,
     image,
     onBook,
@@ -167,19 +172,16 @@ const UserAvailableRoom: React.FC = () => {
           >
             Book
           </button>
-          {/* Conditionally render the "View Bookings" button */}
-          {onViewBookings && (
-            <button onClick={onViewBookings} className="btn btn-accent">
-              View Bookings
-            </button>
-          )}
+          <button onClick={onViewBookings} className="btn btn-accent">
+            View Bookings
+          </button>
         </div>
       </div>
     </div>
   );
 
-  const filteredRooms = rooms.filter((room) =>
-    filter === "Available" ? room.available : !room.available
+  const filteredTables = tables.filter((table) =>
+    filter === "Available" ? table.available : !table.available
   );
 
   return (
@@ -248,7 +250,9 @@ const UserAvailableRoom: React.FC = () => {
       </aside>
       <main className="flex-1 p-6 bg-white h-screen overflow-y-auto">
         <div className="container mx-auto p-4">
-          <h1 className="text-2xl font-bold mb-4 text-black">Rooms</h1>
+          <h1 className="text-2xl font-bold mb-4 text-black">
+            Tutoring Room Tables
+          </h1>
           <div className="mb-4 flex space-x-4">
             <button
               className={`btn ${
@@ -268,18 +272,14 @@ const UserAvailableRoom: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {filteredRooms.map((room, index) => (
-              <RoomCard
+            {filteredTables.map((table, index) => (
+              <TableCard
                 key={index}
-                title={room.title}
-                image={room.imageUrl}
-                onBook={() => handleBookClick(room.title)}
-                onViewBookings={
-                  shouldShowViewBookings(room.title)
-                    ? () => handleViewBookingsClick(room.title)
-                    : undefined
-                }
-                available={room.available} // Pass the availability prop
+                title={table.title}
+                image={table.imageUrl}
+                onBook={() => handleBookClick(roomTitle, table.title)}
+                onViewBookings={() => handleViewBookingsClick(table.title)} // Pass the view bookings function
+                available={table.available}
               />
             ))}
           </div>
@@ -324,4 +324,4 @@ const UserAvailableRoom: React.FC = () => {
   );
 };
 
-export default UserAvailableRoom;
+export default UserTutoringAvailableTable;

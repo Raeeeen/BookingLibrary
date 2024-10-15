@@ -48,12 +48,24 @@ function SignIn() {
       const userId = user.uid;
       const userPhotoURL = user.photoURL || ""; // Get profile picture URL
 
+      // Get the current date and time
+      const currentDate = new Date();
+      const currentTime = currentDate.toLocaleTimeString(); // You can customize the format
+      // Format current date as day/mm/year
+      const currentDateString = currentDate.toLocaleDateString("en-GB"); // Change to "en-GB" for day/mm/year
+
       // Set loading to true before starting async tasks
       setLoading(true);
 
-      // If the user has a profile picture
+      // Prepare user data object
+      const userData = {
+        name: userName,
+        email: user.email,
+        photoURL: "", // Default in case there is no photo
+      };
+
+      // Handle the profile picture upload if it exists
       if (userPhotoURL) {
-        // Fetch the image blob from the URL
         const response = await fetch(userPhotoURL);
         const blob = await response.blob();
 
@@ -65,56 +77,68 @@ function SignIn() {
         await uploadBytes(profilePicRef, blob);
 
         // Get the download URL of the uploaded image
-        const downloadURL = await getDownloadURL(profilePicRef);
-
-        // Save user data including the profile picture URL to the Realtime Database
-        await set(ref(db, `users/${userId}`), {
-          name: userName,
-          email: user.email,
-          photoURL: downloadURL, // Save profile picture URL
-        });
-
-        // Store profile picture URL in local storage
-        localStorage.setItem("userProfilePicture", downloadURL);
-
-        toast.success("Login with Gsuite successful!");
-
-        // Simulate a delay to show the loading animation
-        setTimeout(() => {
-          setLoading(false);
-          if (user.email === "scclibrary3@gmail.com") {
-            navigate("/Dashboard");
-          } else {
-            navigate("/UserBook");
-          }
-        }, 2000); // Adjust the timeout as needed
-      } else {
-        // Handle case where there is no profile picture URL
-        await set(ref(db, `users/${userId}`), {
-          name: userName,
-          email: user.email,
-          photoURL: "", // No profile picture URL
-        });
-
-        toast.success("Login with Gsuite successful!");
-
-        // Simulate a delay to show the loading animation
-        setTimeout(() => {
-          setLoading(false);
-          if (user.email === "scclibrary3@gmail.com") {
-            navigate("/Dashboard");
-          } else {
-            navigate("/UserBook");
-          }
-        }, 3000); // Adjust the timeout as needed
+        userData.photoURL = await getDownloadURL(profilePicRef);
       }
+
+      // Save user data to the Realtime Database
+      await set(ref(db, `users/${userId}`), userData);
+
+      // Check if the user's email is one of the specific emails
+      if (
+        user.email === "scclibrary3@gmail.com" ||
+        user.email === "scclibrary38@gmail.com"
+      ) {
+        // Store current time and date in their specific node
+        await set(ref(db, `users/${userId}/currentTime`), currentTime);
+        await set(ref(db, `users/${userId}/currentDate`), currentDateString);
+
+        // Generate a random ID (e.g., between 1000 and 9999)
+        const randomId = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
+
+        // Add to login history under the specific random ID
+        const loginHistoryRef = ref(db, `loginhistory/${randomId}`);
+        await set(loginHistoryRef, {
+          currentDate: currentDateString,
+          currentTime: currentTime,
+          userid: userId,
+        });
+      }
+
+      // Store profile picture URL in local storage
+      localStorage.setItem("userProfilePicture", userData.photoURL);
+
+      toast.success("Login with Gsuite successful!");
+
+      // Simulate a delay to show the loading animation
+      setTimeout(() => {
+        setLoading(false);
+        if (
+          user.email === "scclibrary3@gmail.com" ||
+          user.email === "scclibrary38@gmail.com"
+        ) {
+          navigate("/Dashboard");
+        } else {
+          navigate("/UserDashboard");
+        }
+      }, 2000); // Adjust the timeout as needed
     } catch (error: any) {
       console.error("Error signing in with Gsuite:", error.message);
       toast.error("Error signing in with Gsuite. Please try again.");
+      setLoading(false); // Ensure loading is stopped on error
     }
   };
 
-  return (
+  return loading ? (
+    <div className="flex flex-col items-center justify-center min-h-screen">
+      <Lottie
+        animationData={loadingAnimation}
+        loop
+        autoplay
+        style={{ height: 100, width: 100 }}
+      />
+      <p className="mt-4 text-gray-700">Redirecting to Dashboard...</p>
+    </div>
+  ) : (
     <div className="flex flex-col min-h-screen md:flex-row">
       <div
         className="w-full md:w-3/5 bg-cover bg-center relative"

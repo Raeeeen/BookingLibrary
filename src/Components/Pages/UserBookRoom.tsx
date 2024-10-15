@@ -9,13 +9,19 @@ import {
 } from "firebase/database";
 import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
+import historyLogo from "../../assets/reportslogo.png";
+import borrowLogo from "../../assets/borrowicon.png";
+import faqLogo from "../../assets/faqlogo.png";
+import guidelinesLogo from "../../assets/guidelineslogo.png";
 import { FirebaseApp, initializeApp } from "firebase/app";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import UserSelection from "./UserSelection";
+import CourseSelection from "./CourseSelection";
 import { getAuth } from "firebase/auth";
+import AddStudentsUserSelection from "./AddStudentsUserSelection";
+import BorrowedUserSelection from "./BorrowedUserSelection";
 
 const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
@@ -36,7 +42,7 @@ const UserBookRoom: React.FC = () => {
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
   const [department, setDepartment] = useState<string>("");
-  const [course, setCourse] = useState<string>("");
+  const [gender, setGender] = useState<string>("");
   const [subject, setSubject] = useState<string>("");
   const [startTime, setStartTime] = useState({
     hours: "0",
@@ -53,6 +59,11 @@ const UserBookRoom: React.FC = () => {
   const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const handleDateChange = (date: any) => setDate(date);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [courses, setCourses] = useState<
+    { id: string; name: string; description: string }[]
+  >([]); // New state
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [showCourseSelection, setShowCourseSelection] = useState(false);
   const navigate = useNavigate();
 
   // Firebase configuration
@@ -76,9 +87,9 @@ const UserBookRoom: React.FC = () => {
     const user = auth.currentUser;
     if (user) {
       setCurrentUserId(user.uid);
-      setSelectedUsers([user.uid]); // Set the current user as the selected user
+      setSelectedUsers([user.uid]); // Automatically set current user as selected
     }
-  }, [auth]);
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -98,6 +109,33 @@ const UserBookRoom: React.FC = () => {
     };
 
     fetchUsers();
+  }, [db]);
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      const coursesRef = dbRef(db, "courses");
+      const snapshot = await get(coursesRef);
+      const data = snapshot.val();
+      const fetchCourses: {
+        id: string;
+        name: string;
+        description: string;
+      }[] = [];
+
+      for (const key in data) {
+        if (data[key].availability === true) {
+          fetchCourses.push({
+            id: key,
+            name: data[key].name,
+            description: data[key].description || "",
+          });
+        }
+      }
+
+      setCourses(fetchCourses);
+    };
+
+    fetchCourses();
   }, [db]);
 
   useEffect(() => {
@@ -137,6 +175,60 @@ const UserBookRoom: React.FC = () => {
 
     if (selectedStudents.length === 0) {
       toast.error("Please select at least one students.");
+      return;
+    }
+
+    if (selectedCourses.length === 0) {
+      toast.error("Please select at least one Course.");
+      return;
+    }
+
+    if (!purpose) {
+      toast.error("Please enter the purpose.");
+      return;
+    }
+
+    if (!department) {
+      toast.error("Please select a department.");
+      return;
+    }
+
+    if (!subject) {
+      toast.error("Please enter the subject.");
+      return;
+    }
+
+    if (!gender) {
+      toast.error("Please select gender.");
+      return;
+    }
+
+    if (!date) {
+      toast.error("Please select a date.");
+      return;
+    }
+
+    // Ensure no undefined values in selectedCourses
+    const validCourses = selectedCourses.filter(
+      (course) => course !== undefined && course !== null
+    );
+    if (validCourses.length === 0) {
+      toast.error("One or more courses are invalid.");
+      return;
+    }
+
+    if (
+      !startTime ||
+      !startTime.hours ||
+      !startTime.minutes ||
+      !startTime.amPm
+    ) {
+      toast.error("Please select a valid start time.");
+      return;
+    }
+
+    if (!endTime || !endTime.hours || !endTime.minutes || !endTime.amPm) {
+      toast.error("Please select a valid end time.");
       return;
     }
 
@@ -187,6 +279,14 @@ const UserBookRoom: React.FC = () => {
     // Check if the start time is before the end time
     if (startTimeDateUTC8 >= endTimeDateUTC8) {
       toast.error("End time must be after start time.");
+      return;
+    }
+
+    // Check if the booking is exactly one hour
+    const duration =
+      (endTimeDateUTC8.getTime() - startTimeDateUTC8.getTime()) / 60000; // duration in minutes
+    if (duration !== 60) {
+      toast.error("You can only book for 1h.");
       return;
     }
 
@@ -269,20 +369,22 @@ const UserBookRoom: React.FC = () => {
       borrowedBy: selectedUsers,
       purpose: purpose,
       department: department,
-      course: course,
+      course: validCourses,
       subject: subject,
+      gender: gender,
     };
 
     // Reference to the pendingbookings node
-    const bookingRef = dbRef(db, `pendingbookings/${roomId}`); // Change this to 'pendingbookings'
+    const bookingRef = dbRef(db, `pendingRoomBookings/${roomId}`); // Change this to 'pendingbookings'
 
     try {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
 
       toast.success("Waiting for the Admin confirmation!");
+      setSelectedUsers([]); // Clear selected users after booking
       setTimeout(() => {
-        navigate("/UserBook");
+        navigate("/UserDashboard");
       }, 2000);
 
       // Clear form fields after successful submission
@@ -292,7 +394,8 @@ const UserBookRoom: React.FC = () => {
       setSelectedUsers([]);
       setPurpose("");
       setDepartment("");
-      setCourse("");
+      setGender("");
+      setCourses([]);
       setSubject("");
       setStartTime({ hours: "0", minutes: "00", amPm: "AM" });
       setEndTime({ hours: "0", minutes: "00", amPm: "AM" });
@@ -338,7 +441,18 @@ const UserBookRoom: React.FC = () => {
     setShowStudentsSelection(false);
   };
 
+  const handleSelectCourses = (selected: string[]) => {
+    setSelectedCourses(selected);
+    setShowCourseSelection(false);
+  };
+
   const openStudentsModal = () => setShowStudentsSelection(true);
+  const openCourseModal = () => setShowCourseSelection(true);
+  const openUserModal = () => setShowUserSelection(true);
+
+  // Calculate the minimum date for booking (3 days from today)
+  const minBookingDate = new Date();
+  minBookingDate.setDate(minBookingDate.getDate() + 3);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -352,13 +466,53 @@ const UserBookRoom: React.FC = () => {
         </div>
         <nav>
           <ul>
-            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+            <li className="mb-4">
               <a
-                href="/UserBook"
+                href="/UserDashboard"
                 className="flex items-center p-2 hover:bg-gray-200 rounded-md"
               >
                 <img src={dashboardlogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">BOOK ROOM</span>
+                <span className="ml-2 text-black font-bold">Dashboard</span>
+              </a>
+            </li>
+            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+              <a
+                href="/UserBookBorrow"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={borrowLogo} alt="Dashboard" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">Book/Borrow</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="/UserTransactionHistory"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={historyLogo} alt="Dashboard" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">
+                  Transaction History
+                </span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="/UserFAQ"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={faqLogo} alt="Dashboard" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">FAQ</span>
+              </a>
+            </li>
+            <li className="mb-4">
+              <a
+                href="/UserGuidelinesAndPrivacy"
+                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+              >
+                <img src={guidelinesLogo} alt="Dashboard" className="h-6 w-6" />
+                <span className="ml-2 text-black font-bold">
+                  Guidelines and Privacy
+                </span>
               </a>
             </li>
           </ul>
@@ -396,13 +550,18 @@ const UserBookRoom: React.FC = () => {
                 >
                   Department:
                 </label>
-                <input
-                  type="text"
+                <select
                   id="department"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                />
+                >
+                  <option value="">Select a department</option>
+                  <option value="CCS">CCS</option>
+                  <option value="CTEAS">CTEAS</option>
+                  <option value="CBE">CBE</option>
+                  <option value="COC">COC</option>
+                </select>
               </div>
               <div>
                 <label
@@ -411,13 +570,28 @@ const UserBookRoom: React.FC = () => {
                 >
                   Course:
                 </label>
-                <input
-                  type="text"
-                  id="course"
-                  value={course}
-                  onChange={(e) => setCourse(e.target.value)}
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                />
+                <button
+                  type="button"
+                  onClick={openCourseModal}
+                  className="p-2 bg-black text-white rounded"
+                >
+                  Select Course
+                </button>
+                {selectedCourses.length > 0 && (
+                  <ul className="mt-3">
+                    {selectedCourses.map((coursesId, index) => {
+                      return (
+                        <li
+                          key={index}
+                          className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                        >
+                          {courses.find((u) => u.id === coursesId)
+                            ?.description || coursesId}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
               <div>
                 <label
@@ -449,30 +623,53 @@ const UserBookRoom: React.FC = () => {
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                 />
               </div>
+              <div>
+                <label
+                  htmlFor="gender"
+                  className="block text-black text-sm font-bold mb-2 mt-2"
+                >
+                  Gender:
+                </label>
+                <select
+                  id="gender"
+                  value={gender} // Consider renaming `purpose` to `gender` for clarity
+                  onChange={(e) => setGender(e.target.value)}
+                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+
               <div className="mb-4">
                 <label
                   className="block text-black text-sm font-bold mb-2 mt-2"
                   htmlFor="students"
                 >
-                  Booked By:
+                  Borrowed By:
                 </label>
                 <button
                   type="button"
-                  onClick={() => setShowUserSelection(true)}
+                  onClick={openUserModal}
                   className="p-2 bg-black text-white rounded"
                 >
-                  Select Students
+                  Select Borowed By
                 </button>
                 {selectedUsers.length > 0 && (
                   <ul className="mt-3">
-                    {selectedUsers.map((user, index) => (
-                      <li
-                        key={index}
-                        className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                      >
-                        {users.find((u) => u.id === user)?.name || user}
-                      </li>
-                    ))}
+                    {selectedUsers.map((userId) => {
+                      const user = users.find((u) => u.id === userId);
+                      return (
+                        <li
+                          key={userId}
+                          className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                        >
+                          {user ? user.name : userId}{" "}
+                          {/* Fallback to user ID if name not found */}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -515,6 +712,7 @@ const UserBookRoom: React.FC = () => {
                   id="date"
                   selected={date}
                   onChange={handleDateChange}
+                  minDate={minBookingDate} // Set the minimum selectable date
                   className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                   dateFormat="yyyy-MM-dd"
                 />
@@ -617,7 +815,7 @@ const UserBookRoom: React.FC = () => {
       </main>
       {showUserSelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <UserSelection
+          <BorrowedUserSelection
             users={[users.find((user) => user.id === currentUserId)!]} // Pass only the current user
             selectedUsers={selectedUsers}
             onSelect={handleSelectUsers}
@@ -627,7 +825,7 @@ const UserBookRoom: React.FC = () => {
       )}
       {showStudentsSelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <UserSelection
+          <AddStudentsUserSelection
             users={users}
             selectedUsers={selectedStudents}
             onSelect={handleSelectStudents}
@@ -635,6 +833,17 @@ const UserBookRoom: React.FC = () => {
           />
         </div>
       )}
+      {showCourseSelection && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <CourseSelection
+            courses={courses}
+            selectedCourses={selectedCourses}
+            onSelect={handleSelectCourses}
+            onCancel={() => setShowCourseSelection(false)}
+          />
+        </div>
+      )}
+
       <ToastContainer />
     </div>
   );

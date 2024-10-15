@@ -7,7 +7,6 @@ import {
   onValue,
   update,
   remove,
-  ref,
   get,
 } from "firebase/database";
 import {
@@ -21,18 +20,17 @@ import dashboardlogo from "../../assets/dashboardlogo.png";
 import roomslogo from "../../assets/roomslogo.png";
 import equipmentslogo from "../../assets/equipmentslogo.png";
 import reportslogo from "../../assets/reportslogo.png";
+import qrCode from "../../assets/qrcodelogo.png";
 import reschedule from "../../assets/rescheduling.png";
 import loginHistoryLogo from "../../assets/loginhistory.png";
-import qrCode from "../../assets/qrcodelogo.png";
-import coursesLogo from "../../assets/courses.png";
-import searchLogo from "../../assets/searchlogo.png";
 import borrowLogo from "../../assets/borrowicon.png";
 import managedataLogo from "../../assets/managelogo.png";
 import { ToastContainer, toast } from "react-toastify";
+import coursesLogo from "../../assets/courses.png";
 import "react-toastify/dist/ReactToastify.css";
 import Lottie from "lottie-react";
 import loadingAnimation from "../../assets/loadinganimation2.json"; // Path to your Lottie JSON file
-import Modal from "./Modal";
+import Modal from "./DashboardModal";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -49,17 +47,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Define a TypeScript interface for the table
-interface Table {
-  availability: boolean; // Availability status
-  description: string; // Description of the table
-  imageUrl: string; // Image URL of the table
-  room: string; // Room associated with the table
-}
-
-function Rooms() {
+function Equipments() {
   const navigate = useNavigate();
-  const [rooms, setRooms] = useState<
+  const [equipments, setEquipments] = useState<
     {
       id: number;
       description: string;
@@ -71,81 +61,58 @@ function Rooms() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(true); // Loading state
   const [showAddOptions, setShowAddOptions] = useState(true);
+  const [newDescription, setNewDescription] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedRoomKey, setSelectedRoomKey] = useState<string>("");
+  const [selectedEquipmentKey, setSelectedEquipmentKey] = useState<string>("");
   const [extraDescription, setExtraDescription] = useState<string | null>(null); // Store fetched extra description
   const [isShowingDescription, setIsShowingDescription] = useState(false); // Flag to track whether showing description modal is open
-  const [newDescription, setNewDescription] = useState<string>("");
-
-  const showTable = () => {
-    const db = getDatabase();
-    const tablesRef = ref(db, "tables");
-    get(tablesRef)
-      .then((snapshot) => {
-        if (snapshot.exists()) {
-          const allTables = Object.entries(snapshot.val());
-          // Filter for tables with room "Tutoring Room"
-          const filteredTables = allTables.filter(
-            ([_, table]) => (table as Table).room === "Tutoring Room"
-          );
-          setTableData(filteredTables); // Set filtered table data
-        } else {
-          setTableData([]); // No data available
-        }
-        setIsModalOpen(true); // Open the modal after fetching the data
-      })
-      .catch((error) => {
-        console.error("Error fetching table data:", error);
-      });
-  };
 
   useEffect(() => {
-    const roomsRef = dbRef(db, "rooms");
+    const equipmentsRef = dbRef(db, "equipments");
 
     const handleData = (snapshot: any) => {
       const data = snapshot.val();
       if (data) {
-        const roomList = Object.keys(data).map((key, index) => ({
+        const equipmentsList = Object.keys(data).map((key, index) => ({
           id: index + 1,
           description: data[key].description,
           isAvailable: data[key].availability ?? true,
           key,
           imageUrl: data[key].imageUrl,
         }));
-        setRooms(roomList);
+        setEquipments(equipmentsList);
       } else {
-        setRooms([]);
+        setEquipments([]);
       }
       setLoading(false); // Set loading to false after data is fetched
     };
 
     // Set up the listener
-    const unsubscribe = onValue(roomsRef, handleData);
+    const unsubscribe = onValue(equipmentsRef, handleData);
 
     // Cleanup listener on unmount
     return () => unsubscribe();
   }, []);
 
-  const handleAddRoom = () => {
-    navigate("/AddRoom");
-  };
-
-  const updateRoom = async (roomKey: string, currentStatus: boolean) => {
+  const updateEquipments = async (
+    equipmentKey: string,
+    currentStatus: boolean
+  ) => {
     try {
-      const roomRef = dbRef(db, `rooms/${roomKey}`);
+      const roomRef = dbRef(db, `equipments/${equipmentKey}`);
       const newStatus = !currentStatus; // Toggle the current status
       await update(roomRef, { availability: newStatus });
 
       // Update local state
-      setRooms((prevRooms) =>
-        prevRooms.map((room) =>
-          room.key === roomKey ? { ...room, isAvailable: newStatus } : room
+      setEquipments((prevEquipments) =>
+        prevEquipments.map((equipments) =>
+          equipments.key === equipmentKey
+            ? { ...equipments, isAvailable: newStatus }
+            : equipments
         )
       );
     } catch (error) {
-      console.error("Error updating room: ", error);
+      console.error("Error updating equipments: ", error);
     }
   };
 
@@ -153,7 +120,7 @@ function Rooms() {
   const deleteFilesInPath = async (description: string) => {
     try {
       const storage = getStorage();
-      const folderRef = storageRef(storage, `rooms/${description}`);
+      const folderRef = storageRef(storage, `equipments/${description}`);
 
       // List all files in the folder
       const listResult = await listAll(folderRef);
@@ -175,17 +142,17 @@ function Rooms() {
     }
   };
 
-  // Function to delete room data from Realtime Database
-  const deleteRoomData = async (roomKey: string) => {
+  // Function to delete equipments data from Realtime Database
+  const deleteEquipmentData = async (equipmentKey: string) => {
     try {
-      const roomRef = dbRef(db, `rooms/${roomKey}`);
+      const equipmentRef = dbRef(db, `equipments/${equipmentKey}`);
 
       // Remove the room data
-      await remove(roomRef);
+      await remove(equipmentRef);
 
-      console.log("Room data deleted successfully");
+      console.log("Equipment data deleted successfully");
     } catch (error) {
-      console.error("Error deleting room data: ", error);
+      console.error("Error deleting room equipment: ", error);
     }
   };
 
@@ -209,35 +176,39 @@ function Rooms() {
     }
   };
 
-  // Function to delete a room and its associated files
-  const deleteRoomAndFiles = async (room: {
+  // Function to delete a equipments and its associated files
+  const deleteEquipmentAndFiles = async (equipments: {
     description: string;
     imageUrl?: string;
     key: string; // Add the key here
   }) => {
     try {
       // Delete the image file if imageUrl is present
-      if (room.imageUrl) {
-        await deleteFileByUrl(room.imageUrl);
+      if (equipments.imageUrl) {
+        await deleteFileByUrl(equipments.imageUrl);
       }
 
       // Delete all files under the description path
-      await deleteFilesInPath(room.description);
+      await deleteFilesInPath(equipments.description);
 
       // Delete the room data from the database using the room key
-      await deleteRoomData(room.key);
+      await deleteEquipmentData(equipments.key);
 
-      toast.success("Room deleted successfully!");
-      console.log("Room and all associated files deleted successfully");
+      toast.success("Equipment deleted successfully!");
+      console.log("Equipment and all associated files deleted successfully");
     } catch (error) {
-      console.error("Error deleting room and files: ", error);
+      console.error("Error deleting equipment and files: ", error);
     }
+  };
+
+  const handleAddEquipments = () => {
+    navigate("/AddEquipments");
   };
 
   // Function to handle select all checkbox
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      const allKeys = new Set(rooms.map((room) => room.key));
+      const allKeys = new Set(equipments.map((equipments) => equipments.key));
       setSelectedRows(allKeys);
     } else {
       setSelectedRows(new Set());
@@ -245,55 +216,20 @@ function Rooms() {
   };
 
   // Function to handle row checkbox change
-  const handleRowCheckboxChange = (roomKey: string, isChecked: boolean) => {
+  const handleRowCheckboxChange = (
+    equipmentsKey: string,
+    isChecked: boolean
+  ) => {
     setSelectedRows((prevSelectedRows) => {
       const updatedSelectedRows = new Set(prevSelectedRows);
       if (isChecked) {
-        updatedSelectedRows.add(roomKey);
+        updatedSelectedRows.add(equipmentsKey);
       } else {
-        updatedSelectedRows.delete(roomKey);
+        updatedSelectedRows.delete(equipmentsKey);
       }
       return updatedSelectedRows;
     });
   };
-
-  const handleDeleteTable = (tableId: string) => {
-    const db = getDatabase();
-    const tableRef = ref(db, `tables/${tableId}`);
-    remove(tableRef)
-      .then(() => {
-        setTableData((prev) => prev.filter(([id]) => id !== tableId)); // Update state to remove deleted table
-      })
-      .catch((error) => {
-        console.error("Error deleting table:", error);
-      });
-  };
-
-  const handleUpdateTable = (tableId: string, currentAvailability: boolean) => {
-    const db = getDatabase();
-    const tableRef = ref(db, `tables/${tableId}`);
-    const newAvailability = !currentAvailability; // Toggle availability
-    update(tableRef, { availability: newAvailability }) // Update table availability
-      .then(() => {
-        setTableData((prev) =>
-          prev.map(([id, data]) =>
-            id === tableId
-              ? [id, { ...data, availability: newAvailability }]
-              : [id, data]
-          )
-        ); // Update local state
-      })
-      .catch((error) => {
-        console.error("Error updating table:", error);
-      });
-  };
-  const handleAddTable = () => {
-    navigate("/AddTable");
-  };
-
-  const filteredTables = tableData.filter(([_, table]) =>
-    table.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   // Calculate number of selected rows
   const selectedCount = selectedRows.size;
@@ -303,8 +239,8 @@ function Rooms() {
     extraDescription: string
   ) => {
     try {
-      const roomRef = dbRef(getDatabase(), `rooms/${key}`);
-      await update(roomRef, { extraDescription });
+      const equipmentRef = dbRef(getDatabase(), `equipments/${key}`);
+      await update(equipmentRef, { extraDescription });
       toast.success("Description added successfully!");
     } catch (error) {
       console.error("Error adding description: ", error);
@@ -313,14 +249,14 @@ function Rooms() {
   };
 
   // Open modal and set the selected equipment key
-  const openAddDescriptionModal = (roomKey: string) => {
-    setSelectedRoomKey(roomKey);
+  const openAddDescriptionModal = (equipmentKey: string) => {
+    setSelectedEquipmentKey(equipmentKey);
     setIsModalOpen(true);
   };
 
   const handleAddDescriptionSubmit = () => {
     if (newDescription.trim()) {
-      addDescriptionToEquipment(selectedRoomKey, newDescription);
+      addDescriptionToEquipment(selectedEquipmentKey, newDescription);
       setNewDescription("");
       setIsModalOpen(false);
     } else {
@@ -328,10 +264,13 @@ function Rooms() {
     }
   };
 
-  const handleShowDescription = async (roomKey: string) => {
+  const handleShowDescription = async (equipmentKey: string) => {
     try {
-      const roomRef = dbRef(db, `rooms/${roomKey}/extraDescription`);
-      const snapshot = await get(roomRef);
+      const equipmentRef = dbRef(
+        db,
+        `equipments/${equipmentKey}/extraDescription`
+      );
+      const snapshot = await get(equipmentRef);
       const description = snapshot.val();
       setExtraDescription(description || "No extra description available");
       setIsShowingDescription(true); // Open modal for showing description
@@ -355,8 +294,8 @@ function Rooms() {
     if (selectedRows.size > 0) {
       try {
         for (const key of selectedRows) {
-          const roomRef = dbRef(db, `rooms/${key}`);
-          await update(roomRef, { extraDescription: null });
+          const equipmentRef = dbRef(db, `equipments/${key}`);
+          await update(equipmentRef, { extraDescription: null });
         }
         toast.success("Extra descriptions cleared successfully!");
         handleDescriptionModalClose();
@@ -369,11 +308,11 @@ function Rooms() {
     }
   };
 
-  const resetEquipmentUsedCount = async (roomKey: string) => {
+  const resetEquipmentUsedCount = async (equipmentKey: string) => {
     try {
-      const roomRef = dbRef(db, `rooms/${roomKey}`);
-      await update(roomRef, { roomUsed: 0 });
-      toast.success("Room used count reset to 0!");
+      const equipmentRef = dbRef(db, `equipments/${equipmentKey}`);
+      await update(equipmentRef, { equipmentUsed: 0 });
+      toast.success("Equipment used count reset to 0!");
     } catch (error) {
       console.error("Error resetting equipment used count: ", error);
       toast.error("Failed to reset equipment used count.");
@@ -475,7 +414,7 @@ function Rooms() {
               {showAddOptions && (
                 <div className="pl-8 pt-3">
                   <ul>
-                    <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+                    <li className="mb-4">
                       <a
                         href="/Rooms"
                         className="flex items-center p-2 hover:bg-gray-300 rounded-md"
@@ -484,7 +423,7 @@ function Rooms() {
                         <span className="ml-2 text-black font-bold">Rooms</span>
                       </a>
                     </li>
-                    <li className="mb-4">
+                    <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
                       <a
                         href="/Equipments"
                         className="flex items-center p-2 hover:bg-gray-300 rounded-md"
@@ -576,14 +515,15 @@ function Rooms() {
           </ul>
         </nav>
       </aside>
-      <main className="flex-1 p-6 bg-white">
+      <main className="flex-1 p-6 bg-white overflow-auto max-h-screen">
         <div className="p-4">
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-black">Rooms</h1>
-            <button onClick={handleAddRoom} className="btn text-white">
-              + Add New Rooms
+            <h1 className="text-2xl font-bold text-black">Equipments</h1>
+            <button onClick={handleAddEquipments} className="btn text-white">
+              + Add New Equipments
             </button>
           </div>
+
           <div className="overflow-x-auto text-black">
             <table className="table w-full text-black">
               <thead>
@@ -593,7 +533,7 @@ function Rooms() {
                       type="checkbox"
                       className="checkbox border-black"
                       onChange={handleSelectAll}
-                      checked={selectedRows.size === rooms.length}
+                      checked={selectedRows.size === setEquipments.length}
                     />
                   </th>
                   <th className="text-black">ID</th>
@@ -603,68 +543,60 @@ function Rooms() {
                 </tr>
               </thead>
               <tbody>
-                {rooms.map((room) => (
-                  <tr key={room.key}>
+                {equipments.map((equipments) => (
+                  <tr key={equipments.key}>
                     <th>
                       <input
                         type="checkbox"
                         className="checkbox border-black"
-                        checked={selectedRows.has(room.key)}
+                        checked={selectedRows.has(equipments.key)}
                         onChange={(e) =>
-                          handleRowCheckboxChange(room.key, e.target.checked)
+                          handleRowCheckboxChange(
+                            equipments.key,
+                            e.target.checked
+                          )
                         }
                       />
                     </th>
-                    <td>{room.id}</td>
-                    <td>{room.description}</td>
-                    <td>{room.isAvailable ? "Yes" : "No"}</td>
+                    <td>{equipments.id}</td>
+                    <td>{equipments.description}</td>
+                    <td>{equipments.isAvailable ? "Yes" : "No"}</td>
                     <td>
                       <button
                         className="btn btn-sm text-white mr-2"
-                        onClick={() => updateRoom(room.key, room.isAvailable)}
+                        onClick={() =>
+                          updateEquipments(
+                            equipments.key,
+                            equipments.isAvailable
+                          )
+                        }
                       >
                         Update
                       </button>
                       <button
-                        className="btn btn-sm btn-error text-white mr-2"
-                        onClick={() => deleteRoomAndFiles(room)}
+                        className="btn btn-sm btn-error text-white"
+                        onClick={() => deleteEquipmentAndFiles(equipments)}
                       >
                         Delete
                       </button>
                       <button
                         className="btn btn-sm text-white ml-2"
-                        onClick={() => openAddDescriptionModal(room.key)}
+                        onClick={() => openAddDescriptionModal(equipments.key)}
                       >
                         Add Description
                       </button>
                       <button
                         className="btn btn-sm  text-white ml-2"
-                        onClick={() => handleShowDescription(room.key)}
+                        onClick={() => handleShowDescription(equipments.key)}
                       >
                         Show Description
                       </button>
                       <button
                         className="btn btn-sm text-white ml-2"
-                        onClick={() => resetEquipmentUsedCount(room.key)}
+                        onClick={() => resetEquipmentUsedCount(equipments.key)}
                       >
                         Reset Used Count
                       </button>
-                      {room.description === "Tutoring Room" && (
-                        <>
-                          <button
-                            className="btn btn-sm text-white mr-2 ml-2"
-                            onClick={() => showTable()} // Open modal directly
-                          >
-                            Show Tables
-                          </button>
-                          <button
-                            className="btn btn-sm text-white"
-                            onClick={handleAddTable}
-                          >
-                            Add Tables
-                          </button>
-                        </>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -673,7 +605,7 @@ function Rooms() {
           </div>
           <div className="flex justify-between mt-4">
             <span>
-              {selectedCount} of {rooms.length} row(s) selected.
+              {selectedCount} of {equipments.length} row(s) selected.
             </span>
             <div>
               <button className="btn btn-sm mr-2 text-white">Previous</button>
@@ -682,61 +614,6 @@ function Rooms() {
           </div>
         </div>
       </main>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <h2 className="text-lg font-bold text-black">
-          Tables in Tutoring Room
-        </h2>
-
-        <div className="relative mb-4 mt-2">
-          <img
-            src={searchLogo}
-            alt="Search"
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 h-6 w-6"
-          />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-3 py-2 rounded bg-white text-black font-bold placeholder-gray-500 border border-black focus:border-black focus:outline-none"
-            style={{ boxSizing: "border-box" }}
-          />
-        </div>
-
-        {filteredTables.length > 0 ? (
-          <ul>
-            {filteredTables.slice(0, 5).map(([tableId, table]) => (
-              <li
-                key={tableId}
-                className="flex justify-between items-center text-black mt-4"
-              >
-                <span>
-                  {table.description} -{" "}
-                  {table.availability ? "Available" : "Unavailable"}
-                </span>
-                <div>
-                  <button
-                    onClick={() =>
-                      handleUpdateTable(tableId, table.availability)
-                    }
-                    className="btn btn-sm text-white mr-2"
-                  >
-                    {table.availability ? "Update" : "Update"}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTable(tableId)}
-                    className="btn btn-sm btn-error text-white mr-2"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No tables available in the Tutoring Room.</p>
-        )}
-      </Modal>
 
       {/* Modal for adding description */}
       <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
@@ -773,7 +650,7 @@ function Rooms() {
       >
         <div className="p-6">
           <h2 className="text-xl font-bold mb-4 text-black">
-            Room Description
+            Equipment Description
           </h2>
           <p className="text-black">{extraDescription}</p>
           <div className="flex justify-end">
@@ -798,4 +675,4 @@ function Rooms() {
   );
 }
 
-export default Rooms;
+export default Equipments;

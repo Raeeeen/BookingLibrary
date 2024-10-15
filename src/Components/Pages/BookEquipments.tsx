@@ -6,6 +6,7 @@ import {
   set,
   Database,
   get,
+  onValue,
 } from "firebase/database";
 import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
@@ -17,14 +18,14 @@ import qrCode from "../../assets/qrcodelogo.png";
 import { FirebaseApp, initializeApp } from "firebase/app";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import DatePicker from "react-datepicker";
 import coursesLogo from "../../assets/courses.png";
-import loginHistoryLogo from "../../assets/loginhistory.png";
+import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import loginHistoryLogo from "../../assets/loginhistory.png";
 import UserSelection from "./BorrowedUserSelection";
 import CourseSelection from "./CourseSelection";
-import EquipmentSelection from "./EquipmentSelection";
 import QRCode from "qrcode";
+import EquipmentSelection from "./EquipmentSelection";
 import { getStorage, ref, uploadString } from "firebase/storage";
 import borrowLogo from "../../assets/borrowicon.png";
 import managedataLogo from "../../assets/managelogo.png";
@@ -33,28 +34,21 @@ const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
 };
 
-export interface Equipment {
-  id: string;
-  name: string;
-  description: string;
-  availability: boolean;
-}
-
-const imcAvr: React.FC = () => {
+const BookRoom: React.FC = () => {
   const location = useLocation();
-  const roomTitle = location.state?.roomTitle || "Unknown Room";
+  const equipmentTitle = location.state?.equipmentTitle || "Unknown Equipments";
   const [date, setDate] = useState<Date | null>(null);
 
   const [, setStudents] = useState<string[]>([]);
 
   const [, setStudentName] = useState<string>("");
-  const [roomId] = useState(generateRandomRoomId());
-  const [bookedSlots, setBookedSlots] = useState<{ start: Date; end: Date }[]>(
-    []
-  );
+  const [equipmentId] = useState(generateRandomRoomId());
+  const [, setBookedSlots] = useState<{ start: Date; end: Date }[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
-  const [gender, setGender] = useState<string>("");
+
+  const [locationField, setlocation] = useState<string>("");
+  const [contact, setcontact] = useState<string>("");
   const [department, setDepartment] = useState<string>("");
   const [subject, setSubject] = useState<string>("");
   const [startTime, setStartTime] = useState({
@@ -68,8 +62,9 @@ const imcAvr: React.FC = () => {
     amPm: "AM",
   });
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [selectedStudents] = useState<string[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
+  const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const [equipments, setEquipments] = useState<
     { id: string; name: string; description: string }[]
   >([]); // New state
@@ -176,13 +171,13 @@ const imcAvr: React.FC = () => {
   useEffect(() => {
     // Fetch booked slots
     const fetchBookedSlots = async () => {
-      const bookingsRef = dbRef(db, "bookrooms");
+      const bookingsRef = dbRef(db, "bookequipments");
       const snapshot = await get(bookingsRef);
       const data = snapshot.val();
       const slots: { start: Date; end: Date }[] = [];
 
       for (const key in data) {
-        if (data[key].roomName === roomTitle) {
+        if (data[key].equipmentName === equipmentTitle) {
           const start = new Date(data[key].date + "T" + data[key].time);
           const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour booking
           slots.push({ start, end });
@@ -193,7 +188,7 @@ const imcAvr: React.FC = () => {
     };
 
     fetchBookedSlots();
-  }, [db, roomTitle]);
+  }, [db, equipmentTitle]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -228,13 +223,18 @@ const imcAvr: React.FC = () => {
       return;
     }
 
-    if (!gender) {
-      toast.error("Please select gender.");
+    if (!date) {
+      toast.error("Please select a date.");
       return;
     }
 
-    if (!date) {
-      toast.error("Please select a date.");
+    if (!contact) {
+      toast.error("Please enter the phone number.");
+      return;
+    }
+
+    if (!locationField) {
+      toast.error("Please enter a location.");
       return;
     }
 
@@ -312,74 +312,13 @@ const imcAvr: React.FC = () => {
       return;
     }
 
-    // Check if the new booking overlaps with any existing bookings
-    const isOverlapping = bookedSlots.some((slot) => {
-      const slotStart = new Date(
-        new Date(slot.start).getTime() -
-          new Date(slot.start).getTimezoneOffset() * 60000 +
-          8 * 3600000
-      ); // Ensure slot.start is adjusted to UTC+8
-      const slotEnd = new Date(
-        new Date(slot.end).getTime() -
-          new Date(slot.end).getTimezoneOffset() * 60000 +
-          8 * 3600000
-      ); // Ensure slot.end is adjusted to UTC+8
-
-      // Overlapping condition: Start time before existing end time AND end time after existing start time
-      return (
-        slotStart.toDateString() === startTimeDateUTC8.toDateString() &&
-        startTimeDateUTC8 < slotEnd &&
-        endTimeDateUTC8 > slotStart
-      );
-    });
-
-    if (isOverlapping) {
-      toast.error("The selected time slot overlaps with an existing booking.");
-      return;
-    }
-
-    // Check if the time slot already exists in the database
-    const existingBookingsRef = dbRef(db, "bookrooms");
-    const existingBookingsSnapshot = await get(existingBookingsRef);
-    const existingBookings = existingBookingsSnapshot.val();
-
-    if (existingBookings) {
-      const isTimeSlotTaken = Object.values(existingBookings).some(
-        (booking: any) => {
-          const bookingDateUTC8 = new Date(
-            new Date(booking.date).getTime() -
-              new Date(booking.date).getTimezoneOffset() * 60000 +
-              8 * 3600000
-          )
-            .toISOString()
-            .split("T")[0];
-          return (
-            bookingDateUTC8 === startTimeDateUTC8.toISOString().split("T")[0] &&
-            booking.startTime ===
-              `${startHours24.toString().padStart(2, "0")}:${startMinutes24
-                .toString()
-                .padStart(2, "0")}` &&
-            booking.endTime ===
-              `${endHours24.toString().padStart(2, "0")}:${endMinutes24
-                .toString()
-                .padStart(2, "0")}`
-          );
-        }
-      );
-
-      if (isTimeSlotTaken) {
-        toast.error("This time slot is already booked.");
-        return;
-      }
-    }
-
     // Format the date as YYYY-MM-DD
     const formattedDate = startTimeDateUTC8.toISOString().split("T")[0];
 
     // Booking details
     const bookingData = {
-      roomName: roomTitle,
-      roomId: roomId,
+      equipmentName: equipmentTitle,
+      equipmentId: equipmentId,
       studentsSelected: selectedStudents,
       date: formattedDate,
       startTime: `${startHours24.toString().padStart(2, "0")}:${startMinutes24
@@ -390,19 +329,22 @@ const imcAvr: React.FC = () => {
         .padStart(2, "0")}`,
       borrowedBy: selectedUsers,
       purpose: purpose,
+      location: locationField,
+      contact: contact,
       department: department,
+      equipments: selectedEquipments,
       course: validCourses,
       subject: subject,
-      equipments: selectedEquipments, // Save selected equipments
-      gender: gender,
     };
 
     // Reference to the bookrooms node
-    const bookingRef = dbRef(db, `bookrooms/${roomId}`);
+    const bookingRef = dbRef(db, `bookequipments/${equipmentId}`);
 
     try {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
+
+      changeAvailabilityToFalse(equipmentTitle);
 
       // Update equipment availability to false without removing other fields
       for (const equipmentId of selectedEquipments) {
@@ -412,17 +354,18 @@ const imcAvr: React.FC = () => {
         await set(equipmentRef, { ...equipmentData, availability: false });
       }
 
+      await incrementEquipmentUsed(equipmentTitle);
+
       // Generate QR code
-      const qrCodeData = `Room Name: ${roomTitle}, Room ID: ${roomId}, Students Selected: ${selectedStudents.join(
+      const qrCodeData = `Equipment Name: ${equipmentTitle}, Equipment ID: ${equipmentId}, Students Selected: ${selectedStudents.join(
         ", "
-      )}, Equipments: ${selectedEquipments}
-      Date: ${formattedDate}, Start Time: ${bookingData.startTime}, End Time: ${
-        bookingData.endTime
-      }, Borrowed By: ${selectedUsers.join(
+      )}, Date: ${formattedDate}, Start Time: ${
+        bookingData.startTime
+      }, End Time: ${bookingData.endTime}, Borrowed By: ${selectedUsers.join(
         ", "
       )}, Purpose: ${purpose}, Department: ${department}, Course: ${validCourses.join(
         ", "
-      )}, Subject: ${subject}, Gender: ${gender}`;
+      )}, Subject: ${subject}}`;
 
       const qrCodeUrl = await QRCode.toDataURL(qrCodeData);
 
@@ -431,13 +374,13 @@ const imcAvr: React.FC = () => {
       const storage = getStorage(app);
       const qrCodeRef = ref(
         storage,
-        `QRCode/${userid}/${roomTitle}/${roomId}.png`
+        `QRCode/${userid}/${equipmentTitle}/${equipmentId}.png`
       );
       await uploadString(qrCodeRef, qrCodeUrl.split(",")[1], "base64", {
         contentType: "image/png",
       });
 
-      toast.success("Room booked successfully!");
+      toast.success("Equipment booked successfully!");
       setTimeout(() => {
         navigate("/Dashboard");
       }, 2000);
@@ -450,16 +393,106 @@ const imcAvr: React.FC = () => {
       setPurpose("");
       setDepartment("");
       setCourses([]);
-      setGender("");
       setSubject("");
-      setSelectedEquipments([]); // Reset equipments selection
+
       setStartTime({ hours: "0", minutes: "00", amPm: "AM" });
       setEndTime({ hours: "0", minutes: "00", amPm: "AM" });
     } catch (error) {
-      console.error("Error booking room:", error);
+      console.error("Error booking equipment:", error);
       toast.error(
-        "An error occurred while booking the room. Please try again."
+        "An error occurred while booking the equipment. Please try again."
       );
+    }
+  };
+
+  // Function to get the equipment key by matching description
+  const getEquipmentKeyByDescription = async (
+    db: Database,
+    description: string
+  ): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const equipmentsRef = dbRef(db, "equipments");
+
+      onValue(equipmentsRef, (snapshot) => {
+        const data = snapshot.val();
+        let foundKey: string | null = null;
+
+        for (const key in data) {
+          const equipment = data[key];
+          if (equipment.description === description) {
+            foundKey = key;
+            break;
+          }
+        }
+
+        if (foundKey) {
+          resolve(foundKey);
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  };
+
+  // Usage of the function to change availability
+  const changeAvailabilityToFalse = async (description: string) => {
+    const db = getDatabase();
+
+    try {
+      const equipmentKey = await getEquipmentKeyByDescription(db, description);
+
+      if (equipmentKey) {
+        const availabilityRef = dbRef(
+          db,
+          `equipments/${equipmentKey}/availability`
+        );
+        await set(availabilityRef, false);
+        console.log(`Availability for "${description}" has been set to false.`);
+      } else {
+        console.log(`Equipment with description "${description}" not found.`);
+      }
+    } catch (error) {
+      console.error("Error updating availability:", error);
+    }
+  };
+
+  // Function to increment equipmentUsed count
+  const incrementEquipmentUsed = async (description: string) => {
+    const db = getDatabase();
+
+    // Get the equipment key using the description
+    const equipmentId = await getEquipmentKeyByDescription(db, description);
+
+    if (equipmentId) {
+      const equipmentRef = dbRef(db, `equipments/${equipmentId}`);
+
+      try {
+        const equipmentSnapshot = await get(equipmentRef);
+        const equipmentData = equipmentSnapshot.val();
+
+        if (equipmentData) {
+          // Check if equipmentUsed already exists
+          const currentCount = equipmentData.equipmentUsed || 0; // Default to 0 if undefined
+          const newCount = currentCount + 1; // Increment the count
+
+          // Update the equipment entry in the database
+          await set(equipmentRef, {
+            ...equipmentData,
+            equipmentUsed: newCount,
+          });
+          console.log(
+            `Equipment used count for ID "${equipmentId}" updated to ${newCount}.`
+          );
+        } else {
+          console.error(
+            `Equipment with ID "${equipmentId}" not found in the database.`
+          );
+        }
+      } catch (error) {
+        console.error("Error incrementing equipmentUsed count:", error);
+      }
+    } else {
+      console.error(`Equipment with description "${description}" not found.`);
     }
   };
 
@@ -491,6 +524,11 @@ const imcAvr: React.FC = () => {
   const handleSelectBorrowedBy = (selected: string[]) => {
     setSelectedUsers(selected);
     setShowBorrowedBySelection(false);
+  };
+
+  const handleSelectStudents = (selected: string[]) => {
+    setSelectedStudents(selected);
+    setShowStudentsSelection(false);
   };
 
   const handleSelectEquipments = (selected: string[]) => {
@@ -693,10 +731,10 @@ const imcAvr: React.FC = () => {
           <div className="w-full max-w-4xl my-8">
             <form
               onSubmit={handleSubmit}
-              className="bg-white shadow-md rounded px-8 pt-6 pb-8 mt-6 mb-6"
+              className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
             >
               <h2 className="text-center text-2xl font-bold mb-6 text-black">
-                {roomTitle}
+                {equipmentTitle}
               </h2>
               <div className="flex flex-wrap mb-4">
                 {" "}
@@ -709,12 +747,12 @@ const imcAvr: React.FC = () => {
                       className="block text-black text-sm font-bold mb-2"
                       htmlFor="room-id"
                     >
-                      Room ID
+                      Equipment ID
                     </label>
                     <input
                       id="room-id"
                       type="text"
-                      value={roomId}
+                      value={equipmentId}
                       readOnly
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     />
@@ -805,28 +843,59 @@ const imcAvr: React.FC = () => {
                   </div>
                   <div>
                     <label
-                      htmlFor="gender"
+                      htmlFor="location"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      Gender:
+                      Location:
                     </label>
-                    <select
-                      id="gender"
-                      value={gender} // Consider renaming `purpose` to `gender` for clarity
-                      onChange={(e) => setGender(e.target.value)}
+                    <input
+                      type="text"
+                      id="location"
+                      value={locationField}
+                      onChange={(e) => setlocation(e.target.value)}
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="contact"
+                      className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      <option value="">Select Gender</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                    </select>
+                      Phone Number:
+                    </label>
+                    <input
+                      type="text"
+                      id="contact"
+                      value={contact}
+                      onChange={(e) => {
+                        let value = e.target.value;
+
+                        // Remove non-numeric characters
+                        value = value.replace(/\D/g, "");
+
+                        // Ensure the number starts with "09" and is exactly 11 digits long
+                        if (value.startsWith("09")) {
+                          if (value.length > 11) {
+                            value = value.slice(0, 11); // Trim to 11 digits
+                          }
+                        } else {
+                          // Automatically prepend "09" if not present
+                          value = `09${value}`.slice(0, 11); // Prepend "09" and trim to 11 digits
+                        }
+
+                        setcontact(value);
+                      }}
+                      maxLength={11} // Maximum length of the input
+                      placeholder="09xxxxxxxxx" // Hint for the user
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
                   </div>
                   <div className="mb-4">
                     <label
                       className="block text-black text-sm font-bold mb-2 mt-2"
                       htmlFor="borrowed-by"
                     >
-                      Booked By:
+                      Borrowed By:
                     </label>
                     <button
                       type="button"
@@ -1015,6 +1084,16 @@ const imcAvr: React.FC = () => {
           />
         </div>
       )}
+      {showStudentsSelection && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <UserSelection
+            users={users}
+            selectedUsers={selectedStudents}
+            onSelect={handleSelectStudents}
+            onCancel={() => setShowStudentsSelection(false)}
+          />
+        </div>
+      )}
       {showEquipmentsSelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <EquipmentSelection
@@ -1041,4 +1120,4 @@ const imcAvr: React.FC = () => {
   );
 };
 
-export default imcAvr;
+export default BookRoom;

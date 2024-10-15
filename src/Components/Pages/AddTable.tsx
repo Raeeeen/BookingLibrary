@@ -22,9 +22,10 @@ import { useNavigate } from "react-router-dom";
 import borrowLogo from "../../assets/borrowicon.png";
 import managedataLogo from "../../assets/managelogo.png";
 
-function AddRoom() {
+function AddTable() {
   const [description, setDescription] = useState<string>("");
   const [image, setImage] = useState<File | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<string>("Tutoring Room");
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(true);
 
@@ -56,31 +57,32 @@ function AddRoom() {
         // Upload image to Firebase Storage
         const imageStorageRef = storageRef(
           storage,
-          `rooms/${sanitizedDescription}/${image.name}`
+          `tables/${sanitizedDescription}/${image.name}`
         );
         await uploadBytes(imageStorageRef, image);
         imageUrl = await getDownloadURL(imageStorageRef);
       }
 
-      // Add room details to Realtime Database
-      const roomsRef = dbRef(db, "rooms");
-      const newRoomRef = push(roomsRef);
-      await set(newRoomRef, {
+      // Add table details to Realtime Database
+      const tablesRef = dbRef(db, "tables");
+      const newTableRef = push(tablesRef);
+      await set(newTableRef, {
         description,
         imageUrl,
         availability,
+        room: selectedRoom,
       });
 
       // Reset form
       setDescription("");
       setImage(null);
-      toast.success("Room added successful!");
+      toast.success("Table added successful!");
       setTimeout(() => {
         navigate("/Rooms");
       }, 2000);
     } catch (error) {
-      console.error("Error adding room: ", error);
-      alert("Error adding room, please try again.");
+      console.error("Error adding table: ", error);
+      alert("Error adding table, please try again.");
     }
   };
 
@@ -268,15 +270,15 @@ function AddRoom() {
         <div className="flex justify-center items-center min-h-full">
           <div className="w-full max-w-md p-8 space-y-6 bg-white rounded shadow-lg">
             <h1 className="text-2xl font-bold text-center text-black">
-              New Room
+              New Table
             </h1>
-            <p className="text-center text-gray-500 mt-0">Create room</p>
+            <p className="text-center text-gray-500 mt-0">Create tables</p>
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm font-bold text-black">
-                  Room details
+                  Table details
                 </label>
-                <p className="text-gray-500">Provide room information</p>
+                <p className="text-gray-500">Provide table information</p>
               </div>
               <div>
                 <label
@@ -288,11 +290,27 @@ function AddRoom() {
                 <input
                   type="text"
                   id="description"
-                  placeholder="e.g. Conference Room"
+                  placeholder="e.g. Table 1"
                   className="input input-bordered w-full border-gray-400 bg-white text-black mt-2"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
+              </div>
+              <div>
+                <label
+                  className="block text-sm font-bold text-black"
+                  htmlFor="room"
+                >
+                  Select Room
+                </label>
+                <select
+                  id="room"
+                  className="input input-bordered w-full border-gray-400 bg-white text-black mt-2"
+                  value={selectedRoom}
+                  onChange={(e) => setSelectedRoom(e.target.value)}
+                >
+                  <option value="Tutoring Room">Tutoring Room</option>
+                </select>
               </div>
               <div>
                 <label
@@ -329,4 +347,4 @@ function AddRoom() {
   );
 }
 
-export default AddRoom;
+export default AddTable;
