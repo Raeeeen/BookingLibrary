@@ -473,23 +473,23 @@ const TutoringBookTable: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
-      <aside className="w-full md:w-64 bg-gray-100 p-4 h-screen overflow-y-auto scrollbar-hide">
+      <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
         {/* Set height for the sidebar */}
         <style>
           {`
-          .scrollbar-hide {
-            scrollbar-width: none; /* Firefox */
-          }
-          .scrollbar-hide::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, and Opera */
-          }
-        `}
+      .scrollbar-hide {
+        scrollbar-width: none; /* Firefox */
+      }
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, and Opera */
+      }
+    `}
         </style>
         <div className="mb-8 flex justify-center">
           <img
             src={schoolLogo}
             alt="Logo"
-            className="h-18 w-16 md:h-18 md:w-18 rounded-full"
+            className="h-24 w-24 md:h-40 md:w-32 rounded-full" // Adjusted logo size
           />
         </div>
         <nav className="h-full">
@@ -498,19 +498,25 @@ const TutoringBookTable: React.FC = () => {
             <li className="mb-4">
               <a
                 href="/Dashboard"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
               >
                 <img src={dashboardlogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Dashboard</span>
+                <span className="ml-2 text-white font-bold">
+                  Dashboard
+                </span>{" "}
+                {/* Changed to white */}
               </a>
             </li>
-            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+            <li className="mb-4 bg-green-800 border-2 border-green-600 rounded-full p-1">
               <a
                 href="/BookBorrow"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Book/Borrow
+                </span>{" "}
+                {/* Changed to white */}
               </a>
             </li>
 
@@ -518,14 +524,15 @@ const TutoringBookTable: React.FC = () => {
             <li className="mb-4">
               <button
                 onClick={() => setShowAddOptions(!showAddOptions)} // Toggle add options
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md w-full text-left"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md w-full text-left" // Changed to green-600
               >
                 <img
                   src={managedataLogo}
                   alt="Manage Data"
                   className="h-6 w-6"
                 />
-                <span className="ml-2 text-black font-bold">Manage Data</span>
+                <span className="ml-2 text-white font-bold">Manage Data</span>{" "}
+                {/* Changed to white */}
                 <svg
                   className={`ml-auto transition-transform ${
                     showAddOptions ? "transform rotate-180" : ""
@@ -553,40 +560,45 @@ const TutoringBookTable: React.FC = () => {
                     <li className="mb-4">
                       <a
                         href="/Rooms"
-                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                        className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
                       >
                         <img src={roomslogo} alt="Rooms" className="h-6 w-6" />
-                        <span className="ml-2 text-black font-bold">Rooms</span>
+                        <span className="ml-2 text-white font-bold">
+                          Rooms
+                        </span>{" "}
+                        {/* Changed to white */}
                       </a>
                     </li>
                     <li className="mb-4">
                       <a
                         href="/Equipments"
-                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                        className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
                       >
                         <img
                           src={equipmentslogo}
                           alt="Equipments"
                           className="h-6 w-6"
                         />
-                        <span className="ml-2 text-black font-bold">
+                        <span className="ml-2 text-white font-bold">
                           Equipments
-                        </span>
+                        </span>{" "}
+                        {/* Changed to white */}
                       </a>
                     </li>
                     <li className="mb-4">
                       <a
                         href="/Courses"
-                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                        className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
                       >
                         <img
                           src={coursesLogo}
                           alt="Courses"
                           className="h-6 w-6"
                         />
-                        <span className="ml-2 text-black font-bold">
+                        <span className="ml-2 text-white font-bold">
                           Courses
-                        </span>
+                        </span>{" "}
+                        {/* Changed to white */}
                       </a>
                     </li>
                   </ul>
@@ -598,65 +610,75 @@ const TutoringBookTable: React.FC = () => {
             <li className="mb-4">
               <a
                 href="/reports"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
               >
                 <img src={reportslogo} alt="Reports" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Transactions</span>
+                <span className="ml-2 text-white font-bold">
+                  Transactions
+                </span>{" "}
+                {/* Changed to white */}
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/Reschedule"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
               >
                 <img src={reschedule} alt="Reschedule" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Reschedule</span>
+                <span className="ml-2 text-white font-bold">
+                  Reschedule
+                </span>{" "}
+                {/* Changed to white */}
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/QrCode"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
               >
                 <img src={qrCode} alt="QR" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">QR Code</span>
+                <span className="ml-2 text-white font-bold">QR Code</span>{" "}
+                {/* Changed to white */}
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/ReportsTable"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
               >
                 <img
                   src={reportslogo}
                   alt="Reports Table"
                   className="h-6 w-6"
                 />
-                <span className="ml-2 text-black font-bold">Reports Table</span>
+                <span className="ml-2 text-white font-bold">Reports Table</span>{" "}
+                {/* Changed to white */}
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/LoginHistory"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md" // Changed to green-600
               >
                 <img
                   src={loginHistoryLogo}
                   alt="Login History"
                   className="h-6 w-6"
                 />
-                <span className="ml-2 text-black font-bold">Login History</span>
+                <span className="ml-2 text-white font-bold">Login History</span>{" "}
+                {/* Changed to white */}
               </a>
             </li>
           </ul>
         </nav>
       </aside>
+
       <main className="flex-1 p-6 bg-white h-screen overflow-y-auto">
         <div className="flex flex-col items-center justify-center min-h-screen">
           <div className="w-full max-w-4xl my-8">
             <form
               onSubmit={handleSubmit}
-              className="bg-white shadow-md rounded px-8 pt-6 pb-8 mt-6 mb-6"
+              className="bg-white shadow-lg rounded px-8 pt-6 pb-8 mt-6 mb-6 border border-gray-200"
             >
               <h2 className="text-center text-2xl font-bold mb-6 text-black">
                 {roomTitle}

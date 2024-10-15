@@ -186,12 +186,12 @@ const UserTutoringAvailableTable: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-gray-100 p-4">
+      <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
         <div className="mb-8 flex justify-center">
           <img
             src={schoolLogo}
             alt="Logo"
-            className="h-18 w-16 md:h-18 md:w-18 rounded-full"
+            className="h-24 w-24 md:h-40 md:w-32 rounded-full" // Adjusted size for the logo
           />
         </div>
         <nav>
@@ -199,28 +199,32 @@ const UserTutoringAvailableTable: React.FC = () => {
             <li className="mb-4">
               <a
                 href="/UserDashboard"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={dashboardlogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Dashboard</span>
+                <span className="ml-2 text-white font-bold">Dashboard</span>
               </a>
             </li>
-            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+            <li className="mb-4 bg-green-800 border-2 border-green-600 rounded-full p-1">
               <a
                 href="/UserBookBorrow"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">Book/Borrow</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/UserTransactionHistory"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
-                <img src={historyLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">
+                <img
+                  src={historyLogo}
+                  alt="Transaction History"
+                  className="h-6 w-6"
+                />
+                <span className="ml-2 text-white font-bold">
                   Transaction History
                 </span>
               </a>
@@ -228,19 +232,23 @@ const UserTutoringAvailableTable: React.FC = () => {
             <li className="mb-4">
               <a
                 href="/UserFAQ"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
-                <img src={faqLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">FAQ</span>
+                <img src={faqLogo} alt="FAQ" className="h-6 w-6" />
+                <span className="ml-2 text-white font-bold">FAQ</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/UserGuidelinesAndPrivacy"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
-                <img src={guidelinesLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">
+                <img
+                  src={guidelinesLogo}
+                  alt="Guidelines and Privacy"
+                  className="h-6 w-6"
+                />
+                <span className="ml-2 text-white font-bold">
                   Guidelines and Privacy
                 </span>
               </a>
@@ -248,6 +256,7 @@ const UserTutoringAvailableTable: React.FC = () => {
           </ul>
         </nav>
       </aside>
+
       <main className="flex-1 p-6 bg-white h-screen overflow-y-auto">
         <div className="container mx-auto p-4">
           <h1 className="text-2xl font-bold mb-4 text-black">

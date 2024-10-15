@@ -201,11 +201,6 @@ const UserBookEquipments: React.FC = () => {
       return;
     }
 
-    if (selectedUsers.length === 0) {
-      toast.error("Please select at least one students.");
-      return;
-    }
-
     if (selectedCourses.length === 0) {
       toast.error("Please select at least one Course.");
       return;
@@ -475,16 +470,15 @@ const UserBookEquipments: React.FC = () => {
 
   const openEquipmentsModal = () => setShowEquipmentsSelection(true);
   const openCourseModal = () => setShowCourseSelection(true);
-  const openUserModal = () => setShowBorrowedBySelection(true);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
-      <aside className="w-full md:w-64 bg-gray-100 p-4">
+      <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
         <div className="mb-8 flex justify-center">
           <img
             src={schoolLogo}
             alt="Logo"
-            className="h-18 w-16 md:h-18 md:w-18 rounded-full"
+            className="h-24 w-24 md:h-40 md:w-32 rounded-full" // Adjusted size for the logo
           />
         </div>
         <nav>
@@ -492,28 +486,32 @@ const UserBookEquipments: React.FC = () => {
             <li className="mb-4">
               <a
                 href="/UserDashboard"
-                className="flex items-center p-2 hover:bg-gray-200 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={dashboardlogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Dashboard</span>
+                <span className="ml-2 text-white font-bold">Dashboard</span>
               </a>
             </li>
-            <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+            <li className="mb-4 bg-green-800 border-2 border-green-600 rounded-full p-1">
               <a
                 href="/UserBookBorrow"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
-                <img src={borrowLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Book/Borrow</span>
+                <img src={borrowLogo} alt="Borrow" className="h-6 w-6" />
+                <span className="ml-2 text-white font-bold">Book/Borrow</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/UserTransactionHistory"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
-                <img src={historyLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">
+                <img
+                  src={historyLogo}
+                  alt="Transaction History"
+                  className="h-6 w-6"
+                />
+                <span className="ml-2 text-white font-bold">
                   Transaction History
                 </span>
               </a>
@@ -521,19 +519,23 @@ const UserBookEquipments: React.FC = () => {
             <li className="mb-4">
               <a
                 href="/UserFAQ"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
-                <img src={faqLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">FAQ</span>
+                <img src={faqLogo} alt="FAQ" className="h-6 w-6" />
+                <span className="ml-2 text-white font-bold">FAQ</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/UserGuidelinesAndPrivacy"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
-                <img src={guidelinesLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">
+                <img
+                  src={guidelinesLogo}
+                  alt="Guidelines and Privacy"
+                  className="h-6 w-6"
+                />
+                <span className="ml-2 text-white font-bold">
                   Guidelines and Privacy
                 </span>
               </a>
@@ -541,324 +543,329 @@ const UserBookEquipments: React.FC = () => {
           </ul>
         </nav>
       </aside>
+
       <main className="flex-1 p-6 bg-white h-screen overflow-y-auto">
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <div className="w-full max-w-xs">
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="w-full max-w-4xl my-8">
             <form
               onSubmit={handleSubmit}
-              className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4"
+              className="bg-white shadow-lg rounded px-8 pt-6 pb-8 mt-6 mb-6 border border-gray-200"
             >
               <h2 className="text-center text-2xl font-bold mb-6 text-black">
                 {equipmentTitle}
               </h2>
-              <div className="mb-4">
-                <label
-                  className="block text-black text-sm font-bold mb-2"
-                  htmlFor="room-id"
-                >
-                  Equipment ID
-                </label>
-                <input
-                  id="room-id"
-                  type="text"
-                  value={equipmentId}
-                  readOnly
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="department"
-                  className="block text-black text-sm font-bold mb-2"
-                >
-                  Department:
-                </label>
-                <select
-                  id="department"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                >
-                  <option value="">Select a department</option>
-                  <option value="CCS">CCS</option>
-                  <option value="CTEAS">CTEAS</option>
-                  <option value="CBE">CBE</option>
-                  <option value="COC">COC</option>
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="course"
-                  className="block text-black text-sm font-bold mb-2 mt-2"
-                >
-                  Course:
-                </label>
-                <button
-                  type="button"
-                  onClick={openCourseModal}
-                  className="p-2 bg-black text-white rounded"
-                >
-                  Select Course
-                </button>
-                {selectedCourses.length > 0 && (
-                  <ul className="mt-3">
-                    {selectedCourses.map((coursesId, index) => {
-                      return (
-                        <li
-                          key={index}
-                          className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                        >
-                          {courses.find((u) => u.id === coursesId)
-                            ?.description || coursesId}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="subject"
-                  className="block text-black text-sm font-bold mb-2 mt-2"
-                >
-                  Subject:
-                </label>
-                <input
-                  type="text"
-                  id="subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="purpose"
-                  className="block text-black text-sm font-bold mb-2 mt-2"
-                >
-                  Purpose:
-                </label>
-                <input
-                  type="text"
-                  id="purpose"
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="location"
-                  className="block text-black text-sm font-bold mb-2 mt-2"
-                >
-                  Location:
-                </label>
-                <input
-                  type="text"
-                  id="location"
-                  value={locationField}
-                  onChange={(e) => setlocation(e.target.value)}
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="contact"
-                  className="block text-black text-sm font-bold mb-2 mt-2"
-                >
-                  Phone Number:
-                </label>
-                <input
-                  type="text"
-                  id="contact"
-                  value={contact}
-                  onChange={(e) => {
-                    let value = e.target.value;
-
-                    // Remove non-numeric characters
-                    value = value.replace(/\D/g, "");
-
-                    // Ensure the number starts with "09" and is exactly 11 digits long
-                    if (value.startsWith("09")) {
-                      if (value.length > 11) {
-                        value = value.slice(0, 11); // Trim to 11 digits
-                      }
-                    } else {
-                      // Automatically prepend "09" if not present
-                      value = `09${value}`.slice(0, 11); // Prepend "09" and trim to 11 digits
-                    }
-
-                    setcontact(value);
-                  }}
-                  maxLength={11} // Maximum length of the input
-                  placeholder="09xxxxxxxxx" // Hint for the user
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                />
-              </div>
-
-              <div className="mb-4">
-                <label
-                  className="block text-black text-sm font-bold mb-2 mt-2"
-                  htmlFor="students"
-                >
-                  Borrowed By:
-                </label>
-                <button
-                  type="button"
-                  onClick={openUserModal}
-                  className="p-2 bg-black text-white rounded"
-                >
-                  Select Borowed By
-                </button>
-                {selectedUsers.length > 0 && (
-                  <ul className="mt-3">
-                    {selectedUsers.map((userId) => {
-                      const user = users.find((u) => u.id === userId);
-                      return (
-                        <li
-                          key={userId}
-                          className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                        >
-                          {user ? user.name : userId}{" "}
-                          {/* Fallback to user ID if name not found */}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-              <div className="mb-4">
-                <label
-                  className="block text-black text-sm font-bold mb-2 mt-2"
-                  htmlFor="equipments"
-                >
-                  Add Equipments:
-                </label>
-                <button
-                  type="button"
-                  onClick={openEquipmentsModal}
-                  className="p-2 bg-black text-white rounded"
-                >
-                  Select Equipments
-                </button>
-                {selectedEquipments.length > 0 && (
-                  <ul className="mt-3">
-                    {selectedEquipments.map((equipmentId, index) => {
-                      return (
-                        <li
-                          key={index}
-                          className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                        >
-                          {equipments.find((u) => u.id === equipmentId)
-                            ?.description || equipmentId}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              <div className="mb-4">
-                <label
-                  className="block text-black text-sm font-bold mb-2"
-                  htmlFor="date"
-                >
-                  Select Date
-                </label>
-                <DatePicker
-                  id="date"
-                  selected={date}
-                  onChange={handleDateChange}
-                  minDate={minBookingDate} // Set the minimum selectable date
-                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  dateFormat="yyyy-MM-dd"
-                />
-              </div>
-              <div className="mb-4">
-                <label
-                  className="block text-black text-sm font-bold mb-2"
-                  htmlFor="start-time"
-                >
-                  Start Time
-                </label>
-                <div className="flex space-x-2">
-                  <input
-                    name="hours"
-                    type="number"
-                    min="1"
-                    max="12"
-                    value={startTime.hours}
-                    onChange={handleStartTimeChange}
-                    placeholder="HH"
-                    className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  />
-                  <input
-                    name="minutes"
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={startTime.minutes}
-                    onChange={handleStartTimeChange}
-                    placeholder="MM"
-                    className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  />
-                  <select
-                    name="amPm"
-                    value={startTime.amPm}
-                    onChange={handleStartTimeChange}
-                    className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  >
-                    <option value="AM">AM</option>
-                    <option value="PM">PM</option>
-                  </select>
+              <div className="flex flex-wrap mb-4">
+                {/* Use flexbox for arrangement */}
+                <div className="w-full md:w-1/2 pr-2">
+                  {/* Left side */}
+                  <div className="mb-4">
+                    <label
+                      className="block text-black text-sm font-bold mb-2"
+                      htmlFor="room-id"
+                    >
+                      Equipment ID
+                    </label>
+                    <input
+                      id="room-id"
+                      type="text"
+                      value={equipmentId}
+                      readOnly
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="department"
+                      className="block text-black text-sm font-bold mb-2"
+                    >
+                      Department:
+                    </label>
+                    <select
+                      id="department"
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                      <option value="">Select a department</option>
+                      <option value="CCS">CCS</option>
+                      <option value="CTEAS">CTEAS</option>
+                      <option value="CBE">CBE</option>
+                      <option value="COC">COC</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="course"
+                      className="block text-black text-sm font-bold mb-2 mt-2"
+                    >
+                      Course:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={openCourseModal}
+                      className="p-2 bg-black text-white rounded"
+                    >
+                      Select Course
+                    </button>
+                    {selectedCourses.length > 0 && (
+                      <ul className="mt-3">
+                        {selectedCourses.map((coursesId, index) => {
+                          return (
+                            <li
+                              key={index}
+                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                            >
+                              {courses.find((u) => u.id === coursesId)
+                                ?.description || coursesId}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="subject"
+                      className="block text-black text-sm font-bold mb-2 mt-2"
+                    >
+                      Subject:
+                    </label>
+                    <input
+                      type="text"
+                      id="subject"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Time Format is 12 HR
-                </p>
-              </div>
-              <div className="mb-4">
-                <label
-                  className="block text-black text-sm font-bold mb-2"
-                  htmlFor="end-time"
-                >
-                  End Time
-                </label>
-                <div className="flex space-x-2">
-                  <input
-                    name="hours"
-                    type="number"
-                    min="1"
-                    max="12"
-                    value={endTime.hours}
-                    onChange={handleEndTimeChange}
-                    placeholder="HH"
-                    className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  />
-                  <input
-                    name="minutes"
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={endTime.minutes}
-                    onChange={handleEndTimeChange}
-                    placeholder="MM"
-                    className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  />
-                  <select
-                    name="amPm"
-                    value={endTime.amPm}
-                    onChange={handleEndTimeChange}
-                    className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                  >
-                    <option value="AM">AM</option>
-                    <option value="PM">PM</option>
-                  </select>
+                <div className="w-full md:w-1/2 pl-2">
+                  {/* Right side */}
+                  <div>
+                    <label
+                      htmlFor="purpose"
+                      className="block text-black text-sm font-bold mb-2 mt-2"
+                    >
+                      Purpose:
+                    </label>
+                    <input
+                      type="text"
+                      id="purpose"
+                      value={purpose}
+                      onChange={(e) => setPurpose(e.target.value)}
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="location"
+                      className="block text-black text-sm font-bold mb-2 mt-2"
+                    >
+                      Location:
+                    </label>
+                    <input
+                      type="text"
+                      id="location"
+                      value={locationField}
+                      onChange={(e) => setlocation(e.target.value)}
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="contact"
+                      className="block text-black text-sm font-bold mb-2 mt-2"
+                    >
+                      Phone Number:
+                    </label>
+                    <input
+                      type="text"
+                      id="contact"
+                      value={contact}
+                      onChange={(e) => {
+                        let value = e.target.value;
+
+                        // Remove non-numeric characters
+                        value = value.replace(/\D/g, "");
+
+                        // Ensure the number starts with "09" and is exactly 11 digits long
+                        if (value.startsWith("09")) {
+                          if (value.length > 11) {
+                            value = value.slice(0, 11); // Trim to 11 digits
+                          }
+                        } else {
+                          // Automatically prepend "09" if not present
+                          value = `09${value}`.slice(0, 11); // Prepend "09" and trim to 11 digits
+                        }
+
+                        setcontact(value);
+                      }}
+                      maxLength={11} // Maximum length of the input
+                      placeholder="09xxxxxxxxx" // Hint for the user
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <label
+                      className="block text-black text-sm font-bold mb-2 mt-2"
+                      htmlFor="students"
+                    >
+                      Borrowed By:
+                    </label>
+                    {auth.currentUser ? (
+                      <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
+                        {auth.currentUser.displayName ||
+                          auth.currentUser.email ||
+                          auth.currentUser.uid}
+                      </div>
+                    ) : (
+                      <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
+                        No user logged in.
+                      </div>
+                    )}
+                  </div>
+                  <div className="mb-4">
+                    <label
+                      className="block text-black text-sm font-bold mb-2 mt-2"
+                      htmlFor="equipments"
+                    >
+                      Add Equipments:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={openEquipmentsModal}
+                      className="p-2 bg-black text-white rounded"
+                    >
+                      Select Equipments
+                    </button>
+                    {selectedEquipments.length > 0 && (
+                      <ul className="mt-3">
+                        {selectedEquipments.map((equipmentId, index) => {
+                          return (
+                            <li
+                              key={index}
+                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                            >
+                              {equipments.find((u) => u.id === equipmentId)
+                                ?.description || equipmentId}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Time Format is 12 HR
-                </p>
               </div>
+
+              {/* Date, Start Time, and End Time in the Same Line */}
+              <div className="flex flex-wrap mb-4 items-center">
+                {/* Flex container for alignment */}
+                <div className="w-full md:w-1/3 pr-2">
+                  <div className="mb-4">
+                    <label
+                      className="block text-black text-sm font-bold mb-2"
+                      htmlFor="date"
+                    >
+                      Select Date
+                    </label>
+                    <DatePicker
+                      id="date"
+                      selected={date}
+                      onChange={handleDateChange}
+                      minDate={minBookingDate} // Set the minimum selectable date
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                      dateFormat="yyyy-MM-dd"
+                    />
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label
+                    className="block text-black text-sm font-bold mb-2"
+                    htmlFor="start-time"
+                  >
+                    Start Time
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      name="hours"
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={startTime.hours}
+                      onChange={handleStartTimeChange}
+                      placeholder="HH"
+                      className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                    <input
+                      name="minutes"
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={startTime.minutes}
+                      onChange={handleStartTimeChange}
+                      placeholder="MM"
+                      className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                    <select
+                      name="amPm"
+                      value={startTime.amPm}
+                      onChange={handleStartTimeChange}
+                      className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Time Format is 12 HR
+                  </p>
+                </div>
+                <div className="mb-4">
+                  <label
+                    className="block text-black text-sm font-bold mb-2"
+                    htmlFor="end-time"
+                  >
+                    End Time
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      name="hours"
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={endTime.hours}
+                      onChange={handleEndTimeChange}
+                      placeholder="HH"
+                      className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                    <input
+                      name="minutes"
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={endTime.minutes}
+                      onChange={handleEndTimeChange}
+                      placeholder="MM"
+                      className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                    <select
+                      name="amPm"
+                      value={endTime.amPm}
+                      onChange={handleEndTimeChange}
+                      className="shadow appearance-none border bg-white rounded w-1/4 py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Time Format is 12 HR
+                  </p>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <button
                   type="submit"

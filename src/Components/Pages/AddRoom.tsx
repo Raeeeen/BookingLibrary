@@ -86,23 +86,23 @@ function AddRoom() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-gray-100 p-4 h-screen overflow-y-auto scrollbar-hide">
+      <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
         {/* Set height for the sidebar */}
         <style>
           {`
-          .scrollbar-hide {
-            scrollbar-width: none; /* Firefox */
-          }
-          .scrollbar-hide::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, and Opera */
-          }
-        `}
+      .scrollbar-hide {
+        scrollbar-width: none; /* Firefox */
+      }
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, and Opera */
+      }
+    `}
         </style>
         <div className="mb-8 flex justify-center">
           <img
             src={schoolLogo}
             alt="Logo"
-            className="h-18 w-16 md:h-18 md:w-18 rounded-full"
+            className="h-24 w-24 md:h-40 md:w-32 rounded-full" // Adjusted size for the logo
           />
         </div>
         <nav className="h-full">
@@ -111,19 +111,19 @@ function AddRoom() {
             <li className="mb-4">
               <a
                 href="/Dashboard"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={dashboardlogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Dashboard</span>
+                <span className="ml-2 text-white font-bold">Dashboard</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/BookBorrow"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">Book/Borrow</span>
               </a>
             </li>
 
@@ -131,14 +131,14 @@ function AddRoom() {
             <li className="mb-4">
               <button
                 onClick={() => setShowAddOptions(!showAddOptions)} // Toggle add options
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md w-full text-left"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md w-full text-left"
               >
                 <img
                   src={managedataLogo}
                   alt="Manage Data"
                   className="h-6 w-6"
                 />
-                <span className="ml-2 text-black font-bold">Manage Data</span>
+                <span className="ml-2 text-white font-bold">Manage Data</span>
                 <svg
                   className={`ml-auto transition-transform ${
                     showAddOptions ? "transform rotate-180" : ""
@@ -163,26 +163,26 @@ function AddRoom() {
               {showAddOptions && (
                 <div className="pl-8 pt-3">
                   <ul>
-                    <li className="mb-4 bg-gray-200 border-2 border-gray-200 rounded-full p-1">
+                    <li className="mb-4 bg-green-800 border-2 border-green-600 rounded-full p-1">
                       <a
                         href="/Rooms"
-                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                        className="flex items-center p-2 hover:bg-green-600 rounded-md"
                       >
                         <img src={roomslogo} alt="Rooms" className="h-6 w-6" />
-                        <span className="ml-2 text-black font-bold">Rooms</span>
+                        <span className="ml-2 text-white font-bold">Rooms</span>
                       </a>
                     </li>
                     <li className="mb-4">
                       <a
                         href="/Equipments"
-                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                        className="flex items-center p-2 hover:bg-green-600 rounded-md"
                       >
                         <img
                           src={equipmentslogo}
                           alt="Equipments"
                           className="h-6 w-6"
                         />
-                        <span className="ml-2 text-black font-bold">
+                        <span className="ml-2 text-white font-bold">
                           Equipments
                         </span>
                       </a>
@@ -190,14 +190,14 @@ function AddRoom() {
                     <li className="mb-4">
                       <a
                         href="/Courses"
-                        className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                        className="flex items-center p-2 hover:bg-green-600 rounded-md"
                       >
                         <img
                           src={coursesLogo}
                           alt="Courses"
                           className="h-6 w-6"
                         />
-                        <span className="ml-2 text-black font-bold">
+                        <span className="ml-2 text-white font-bold">
                           Courses
                         </span>
                       </a>
@@ -211,59 +211,60 @@ function AddRoom() {
             <li className="mb-4">
               <a
                 href="/reports"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={reportslogo} alt="Reports" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Transactions</span>
+                <span className="ml-2 text-white font-bold">Transactions</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/Reschedule"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={reschedule} alt="Reschedule" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">Reschedule</span>
+                <span className="ml-2 text-white font-bold">Reschedule</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/QrCode"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={qrCode} alt="QR" className="h-6 w-6" />
-                <span className="ml-2 text-black font-bold">QR Code</span>
+                <span className="ml-2 text-white font-bold">QR Code</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/ReportsTable"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img
                   src={reportslogo}
                   alt="Reports Table"
                   className="h-6 w-6"
                 />
-                <span className="ml-2 text-black font-bold">Reports Table</span>
+                <span className="ml-2 text-white font-bold">Reports Table</span>
               </a>
             </li>
             <li className="mb-4">
               <a
                 href="/LoginHistory"
-                className="flex items-center p-2 hover:bg-gray-300 rounded-md"
+                className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img
                   src={loginHistoryLogo}
                   alt="Login History"
                   className="h-6 w-6"
                 />
-                <span className="ml-2 text-black font-bold">Login History</span>
+                <span className="ml-2 text-white font-bold">Login History</span>
               </a>
             </li>
           </ul>
         </nav>
       </aside>
+
       <main className="flex-1 p-6 bg-white">
         <div className="flex justify-center items-center min-h-full">
           <div className="w-full max-w-md p-8 space-y-6 bg-white rounded shadow-lg">
