@@ -72,12 +72,14 @@ function Rooms() {
   const [loading, setLoading] = useState<boolean>(true); // Loading state
   const [showAddOptions, setShowAddOptions] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen1, setIsModalOpen1] = useState(false);
   const [tableData, setTableData] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRoomKey, setSelectedRoomKey] = useState<string>("");
   const [extraDescription, setExtraDescription] = useState<string | null>(null); // Store fetched extra description
   const [isShowingDescription, setIsShowingDescription] = useState(false); // Flag to track whether showing description modal is open
   const [newDescription, setNewDescription] = useState<string>("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const showTable = () => {
     const db = getDatabase();
@@ -94,7 +96,7 @@ function Rooms() {
         } else {
           setTableData([]); // No data available
         }
-        setIsModalOpen(true); // Open the modal after fetching the data
+        setIsModalOpen1(true); // Open the modal after fetching the data
       })
       .catch((error) => {
         console.error("Error fetching table data:", error);
@@ -396,6 +398,15 @@ function Rooms() {
     );
   }
 
+  const handleDropdownToggle = () => {
+    setDropdownOpen(!dropdownOpen);
+  };
+
+  const handleSelection = (key: any, isAvailable: any) => {
+    updateRoom(key, isAvailable);
+    setDropdownOpen(false); // Close dropdown after clicking Yes or No
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
@@ -435,7 +446,9 @@ function Rooms() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -577,7 +590,7 @@ function Rooms() {
         </nav>
       </aside>
 
-      <main className="flex-1 p-6 bg-white">
+      <main className="flex-1 p-6 bg-white overflow-hidden max-h-screen">
         <div className="p-4">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-black">Rooms</h1>
@@ -585,7 +598,8 @@ function Rooms() {
               + Add New Rooms
             </button>
           </div>
-          <div className="overflow-x-auto text-black">
+
+          <div className="overflow-x-auto scrollbar-hide text-black">
             <table className="table w-full text-black">
               <thead>
                 <tr>
@@ -618,54 +632,103 @@ function Rooms() {
                     </th>
                     <td>{room.id}</td>
                     <td>{room.description}</td>
-                    <td>{room.isAvailable ? "Yes" : "No"}</td>
-                    <td>
-                      <button
-                        className="btn btn-sm text-white mr-2"
-                        onClick={() => updateRoom(room.key, room.isAvailable)}
+                    <td className="flex items-center">
+                      {room.isAvailable ? "Yes" : "No"}
+                      {/* Dropdown Menu for Update/Delete */}
+                      <div
+                        className={`dropdown dropdown-left dropdown-end ml-2 ${
+                          dropdownOpen ? "open" : ""
+                        }`}
                       >
-                        Update
-                      </button>
+                        <label
+                          tabIndex={0}
+                          className="btn btn-sm bg-gray-200 ml-2 p-1 text-black"
+                          onClick={handleDropdownToggle}
+                        >
+                          {/* Downward Arrow Icon */}
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </label>
+                        {dropdownOpen && (
+                          <ul
+                            tabIndex={0}
+                            className="dropdown-content menu p-2 shadow bg-gray-200 rounded-lg w-40 max-h-48 overflow-y-auto"
+                          >
+                            <li className="btn btn-sm text-white mb-2">
+                              <button
+                                onClick={() => handleSelection(room.key, false)}
+                              >
+                                Yes
+                              </button>
+                            </li>
+                            <li className="btn btn-sm btn-error text-white">
+                              <button
+                                onClick={() => handleSelection(room.key, true)}
+                              >
+                                No
+                              </button>
+                            </li>
+                          </ul>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      {/* Align buttons in two lines */}
+                      <div className="flex flex-wrap gap-2 justify-start">
+                        <button
+                          className="btn btn-sm bg-error text-white"
+                          onClick={() => resetEquipmentUsedCount(room.key)}
+                        >
+                          Reset Used Count
+                        </button>
+                        <button
+                          className="btn btn-sm text-white"
+                          onClick={() => openAddDescriptionModal(room.key)}
+                        >
+                          Add Description
+                        </button>
+                        <button
+                          className="btn btn-sm text-white"
+                          onClick={() => handleShowDescription(room.key)}
+                        >
+                          Show Description
+                        </button>
+
+                        {room.description === "Tutoring Room" && (
+                          <>
+                            <button
+                              className="btn btn-sm text-white"
+                              onClick={showTable}
+                            >
+                              Show Tables
+                            </button>
+                            <button
+                              className="btn btn-sm text-white"
+                              onClick={handleAddTable}
+                            >
+                              Add Tables
+                            </button>
+                          </>
+                        )}
+                      </div>
                       <button
-                        className="btn btn-sm btn-error text-white mr-2"
+                        className="btn btn-sm btn-error text-white mt-2"
                         onClick={() => deleteRoomAndFiles(room)}
                       >
                         Delete
                       </button>
-                      <button
-                        className="btn btn-sm text-white ml-2"
-                        onClick={() => openAddDescriptionModal(room.key)}
-                      >
-                        Add Description
-                      </button>
-                      <button
-                        className="btn btn-sm  text-white ml-2"
-                        onClick={() => handleShowDescription(room.key)}
-                      >
-                        Show Description
-                      </button>
-                      <button
-                        className="btn btn-sm text-white ml-2"
-                        onClick={() => resetEquipmentUsedCount(room.key)}
-                      >
-                        Reset Used Count
-                      </button>
-                      {room.description === "Tutoring Room" && (
-                        <>
-                          <button
-                            className="btn btn-sm text-white mr-2 ml-2"
-                            onClick={() => showTable()} // Open modal directly
-                          >
-                            Show Tables
-                          </button>
-                          <button
-                            className="btn btn-sm text-white"
-                            onClick={handleAddTable}
-                          >
-                            Add Tables
-                          </button>
-                        </>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -683,7 +746,8 @@ function Rooms() {
           </div>
         </div>
       </main>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+
+      <Modal isOpen={isModalOpen1} onClose={() => setIsModalOpen1(false)}>
         <h2 className="text-lg font-bold text-black">
           Tables in Tutoring Room
         </h2>

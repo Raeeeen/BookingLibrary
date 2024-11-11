@@ -86,7 +86,7 @@ function SignIn() {
       // Check if the user's email is one of the specific emails
       if (
         user.email === "scclibrary3@gmail.com" ||
-        user.email === "scclibrary38@gmail.com"
+        user.email === "scclbrrdmn@gmail.com"
       ) {
         // Store current time and date in their specific node
         await set(ref(db, `users/${userId}/currentTime`), currentTime);
@@ -114,7 +114,7 @@ function SignIn() {
         setLoading(false);
         if (
           user.email === "scclibrary3@gmail.com" ||
-          user.email === "scclibrary38@gmail.com"
+          user.email === "scclbrrdmn@gmail.com"
         ) {
           navigate("/Dashboard");
         } else {

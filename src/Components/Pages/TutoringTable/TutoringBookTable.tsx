@@ -25,7 +25,6 @@ import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import UserSelection from "../BorrowedUserSelection";
-import CourseSelection from "./../CourseSelection";
 import { getStorage, ref, uploadString } from "firebase/storage";
 import QRCode from "qrcode";
 import AddStudentsUserSelection from "../AddStudentsUserSelection";
@@ -67,13 +66,14 @@ const TutoringBookTable: React.FC = () => {
   const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
   const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const [courses, setCourses] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [showCourseSelection, setShowCourseSelection] = useState(false);
+    { id: string; name: string; description: string; department: string }[]
+  >([]);
   const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<string>(""); // For current selection
+  const departments = ["CCS", "COC", "CTEAS", "CBE"];
+  const [filteredCourses, setFilteredCourses] = useState<any[]>([]); // Store filtered courses based on department
 
   // Firebase configuration
   const firebaseConfig = {
@@ -89,6 +89,18 @@ const TutoringBookTable: React.FC = () => {
   // Initialize Firebase
   const app: FirebaseApp = initializeApp(firebaseConfig);
   const db: Database = getDatabase(app);
+
+  // Filter courses when department changes
+  useEffect(() => {
+    if (department) {
+      const filtered = courses.filter(
+        (course) => course.department === department
+      );
+      setFilteredCourses(filtered); // Set filtered courses
+    } else {
+      setFilteredCourses(courses); // Show all courses if no department is selected
+    }
+  }, [department, courses]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -115,27 +127,41 @@ const TutoringBookTable: React.FC = () => {
       const coursesRef = dbRef(db, "courses");
       const snapshot = await get(coursesRef);
       const data = snapshot.val();
+
       const fetchCourses: {
         id: string;
         name: string;
         description: string;
+        department: string;
       }[] = [];
 
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchCourses.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
+      // Loop through departments and courses
+      for (const dept in data) {
+        if (departments.includes(dept)) {
+          const departmentCourses = data[dept];
+
+          // Loop through courses in the department
+          for (const key in departmentCourses) {
+            const course = departmentCourses[key];
+
+            // Only push courses that are available
+            if (course.availability === true) {
+              fetchCourses.push({
+                id: key,
+                name: course.name || "", // Add name if available in the data
+                description: course.description || "",
+                department: dept,
+              });
+            }
+          }
         }
       }
 
-      setCourses(fetchCourses);
+      setCourses(fetchCourses); // Store all fetched courses
     };
 
     fetchCourses();
-  }, [db]);
+  }, []);
 
   useEffect(() => {
     // Fetch booked slots
@@ -177,7 +203,7 @@ const TutoringBookTable: React.FC = () => {
       return;
     }
 
-    if (selectedCourses.length === 0) {
+    if (selectedCourse.length === 0) {
       toast.error("Please select at least one Course.");
       return;
     }
@@ -204,15 +230,6 @@ const TutoringBookTable: React.FC = () => {
 
     if (!date) {
       toast.error("Please select a date.");
-      return;
-    }
-
-    // Ensure no undefined values in selectedCourses
-    const validCourses = selectedCourses.filter(
-      (course) => course !== undefined && course !== null
-    );
-    if (validCourses.length === 0) {
-      toast.error("One or more courses are invalid.");
       return;
     }
 
@@ -369,7 +386,7 @@ const TutoringBookTable: React.FC = () => {
       purpose: purpose,
       department: department,
       tables: tableTitle,
-      course: validCourses,
+      course: Array.isArray(selectedCourse) ? selectedCourse : [selectedCourse], // Convert to array
       subject: subject,
       gender: gender,
     };
@@ -388,9 +405,11 @@ const TutoringBookTable: React.FC = () => {
         bookingData.startTime
       }, End Time: ${bookingData.endTime}, Borrowed By: ${selectedUsers.join(
         ", "
-      )}, Purpose: ${purpose}, Department: ${department}, Tables: ${tableTitle}, Course: ${validCourses.join(
-        ", "
-      )}, Subject: ${subject}, Gender: ${gender}`;
+      )}, Purpose: ${purpose}, Department: ${department}, Tables: ${tableTitle}, Course: ${
+        Array.isArray(selectedCourse)
+          ? selectedCourse
+          : [selectedCourse].join(", ")
+      }, Subject: ${subject}, Gender: ${gender}`;
 
       const qrCodeUrl = await QRCode.toDataURL(qrCodeData);
 
@@ -461,16 +480,11 @@ const TutoringBookTable: React.FC = () => {
     setShowStudentsSelection(false);
   };
 
-  const handleSelectCourses = (selected: string[]) => {
-    setSelectedCourses(selected);
-    setShowCourseSelection(false);
-  };
-
   // Handle show modals
   const openBorrowedByModal = () => setShowBorrowedBySelection(true);
   const openStudentsModal = () => setShowStudentsSelection(true);
-  const openCourseModal = () => setShowCourseSelection(true);
 
+  const minBookingDate = new Date();
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
       <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
@@ -514,7 +528,7 @@ const TutoringBookTable: React.FC = () => {
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
                 <span className="ml-2 text-white font-bold">
-                  Book/Borrow
+                  Booking/Borrowing
                 </span>{" "}
                 {/* Changed to white */}
               </a>
@@ -704,10 +718,10 @@ const TutoringBookTable: React.FC = () => {
                       type="text"
                       value={roomId}
                       readOnly
-                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                      className="shadow appearance-none border bg-gray-200 rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     />
                   </div>
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="department"
                       className="block text-black text-sm font-bold mb-2"
@@ -721,10 +735,11 @@ const TutoringBookTable: React.FC = () => {
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
                       <option value="">Select a department</option>
-                      <option value="CCS">CCS</option>
-                      <option value="CTEAS">CTEAS</option>
-                      <option value="CBE">CBE</option>
-                      <option value="COC">COC</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -732,30 +747,21 @@ const TutoringBookTable: React.FC = () => {
                       htmlFor="course"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      Course:
+                      Program:
                     </label>
-                    <button
-                      type="button"
-                      onClick={openCourseModal}
-                      className="p-2 bg-black text-white rounded"
+                    <select
+                      id="course"
+                      value={selectedCourse} // This should hold the ID of the selected course
+                      onChange={(e) => setSelectedCourse(e.target.value)} // Update the selected course ID
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
-                      Select Course
-                    </button>
-                    {selectedCourses.length > 0 && (
-                      <ul className="mt-3">
-                        {selectedCourses.map((coursesId, index) => {
-                          return (
-                            <li
-                              key={index}
-                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                            >
-                              {courses.find((u) => u.id === coursesId)
-                                ?.description || coursesId}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                      <option value="">Select a Program</option>
+                      {filteredCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label
@@ -776,20 +782,28 @@ const TutoringBookTable: React.FC = () => {
                 <div className="w-full md:w-1/2 pl-2">
                   {" "}
                   {/* Right side */}
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="purpose"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
                       Purpose:
                     </label>
-                    <input
-                      type="text"
+                    <select
                       id="purpose"
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                    />
+                    >
+                      <option value="">Select Purpose</option>
+                      <option value="Meetings">Meetings</option>
+                      <option value="Discussions">Discussions</option>
+                      <option value="Workshops">Workshops</option>
+                      <option value="Presentations">Presentations</option>
+                      <option value="Training">Training</option>
+                      <option value="Reporting">Reporting</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                   <div>
                     <label
@@ -883,6 +897,7 @@ const TutoringBookTable: React.FC = () => {
                       id="date"
                       selected={date}
                       onChange={handleDateChange}
+                      minDate={minBookingDate} // Set the minimum selectable date
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                       dateFormat="yyyy-MM-dd"
                     />
@@ -1007,16 +1022,6 @@ const TutoringBookTable: React.FC = () => {
             selectedUsers={selectedStudents}
             onSelect={handleSelectStudents}
             onCancel={() => setShowStudentsSelection(false)}
-          />
-        </div>
-      )}
-      {showCourseSelection && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <CourseSelection
-            courses={courses}
-            selectedCourses={selectedCourses}
-            onSelect={handleSelectCourses}
-            onCancel={() => setShowCourseSelection(false)}
           />
         </div>
       )}

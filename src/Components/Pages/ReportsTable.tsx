@@ -47,6 +47,11 @@ interface CourseDetail {
   room: string;
 }
 
+interface Course {
+  description: string;
+  [key: string]: any; // This allows any other dynamic properties (like course id, etc.)
+}
+
 function ReportsTable() {
   const [activeTab, setActiveTab] = useState<"rooms" | "equipments">("rooms");
   const [activeGenderTab, setActiveGenderTab] = useState<"male" | "female">(
@@ -54,7 +59,7 @@ function ReportsTable() {
   );
   const [equipmentNames, setEquipmentNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [courses, setCourses] = useState<string[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [, setRoomData] = useState<any[]>([]); // Add state for room data
   const [, setTotalBookings] = useState(0); // State for total bookings
   const [roomCounts, setRoomCounts] = useState<RoomCounts>({
@@ -66,6 +71,9 @@ function ReportsTable() {
     CourseDetail[]
   >([]);
 
+  const [isModalOpenEquipment, setIsModalOpenEquipment] = useState(false);
+  const [isModalOpenMale, setIsModalOpenMale] = useState(false);
+  const [isModalOpenFemale, setIsModalOpenFemale] = useState(false);
   const formatDate = (date: Date) => {
     const options: Intl.DateTimeFormatOptions = {
       year: "numeric",
@@ -95,12 +103,288 @@ function ReportsTable() {
   const db = getDatabase(app);
 
   useEffect(() => {
-    const currentDate = new Date().toISOString().split("T")[0];
-    const roomsRef = ref(db, `reportsTable/rooms/${currentDate}`);
+    const equipmentsRef = ref(db, "equipments");
+
+    const unsubscribe = onValue(equipmentsRef, (snapshot) => {
+      const equipmentsData = snapshot.val();
+      const loadedEquipmentNames: string[] = [];
+
+      if (equipmentsData) {
+        for (const equipmentId in equipmentsData) {
+          const name = equipmentsData[equipmentId].description;
+          loadedEquipmentNames.push(name);
+        }
+      } else {
+        console.log("No equipment data found.");
+      }
+
+      setEquipmentNames(loadedEquipmentNames); // Update state with loaded names
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const coursesRef = ref(db, "courses");
+
+    const unsubscribeCourses = onValue(coursesRef, (snapshot) => {
+      const coursesData = snapshot.val();
+      const loadedCourses: {
+        department: string;
+        courseId: string;
+        description: string;
+      }[] = [];
+
+      for (const department in coursesData) {
+        if (coursesData[department]) {
+          for (const courseId in coursesData[department]) {
+            const courseInfo = coursesData[department][courseId];
+            const courseDescription = courseInfo?.description;
+
+            if (courseDescription) {
+              loadedCourses.push({
+                department,
+                courseId,
+                description: courseDescription,
+              });
+              console.log(
+                `Department: ${department}, Course Description: ${courseDescription}`
+              );
+            } else {
+              console.warn(
+                `No description found for course ID ${courseId} in department ${department}`
+              );
+            }
+          }
+        }
+      }
+
+      // After loading all course descriptions with department info, update state
+      setLoading(false);
+      setCourses(loadedCourses);
+    });
+
+    return () => {
+      unsubscribeCourses();
+    };
+  }, []);
+
+  useEffect(() => {
+    const currentDate = new Date(); // Get the current local date
+    const currentDateString = currentDate.toLocaleDateString("en-CA"); // Format it as YYYY-MM-DD
+
+    const roomsRef = ref(db, `reportsTable/rooms/${currentDateString}`);
+
+    const unsubscribeRooms = onValue(roomsRef, (snapshot) => {
+      const roomsData = snapshot.val();
+      const loadedRoomData: any[] = [];
+      let count = 0;
+
+      if (roomsData) {
+        for (const roomId in roomsData) {
+          const room = roomsData[roomId];
+
+          // Log the course for the current room
+          console.log(`Room ID: ${roomId}, Course: ${room.course}`);
+
+          loadedRoomData.push({
+            course: room.course,
+            startTime: room.startTime,
+            endTime: room.endTime,
+          });
+          count++;
+        }
+      }
+
+      setRoomData(loadedRoomData);
+      setTotalBookings(count);
+    });
+
+    return () => {
+      unsubscribeRooms();
+    };
+  }, []);
+
+  useEffect(() => {
+    const currentDate = new Date();
+    const currentDateString = currentDate.toLocaleDateString("en-CA"); // Format as YYYY-MM-DD
+    console.log("Current Date:", currentDateString);
+
+    const roomsRef = ref(db, `reportsTable/rooms`);
+
+    const countRooms = (roomsData: any) => {
+      const counts = {
+        conference: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
+        collaboratory: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
+        tutoring: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
+      };
+
+      if (roomsData) {
+        for (const roomId in roomsData) {
+          const room = roomsData[roomId];
+          const startHour = new Date(`1970-01-01T${room.startTime}`).getHours();
+          const roomName = room.roomName;
+          const gender = room.gender;
+
+          if (roomName === "Conference Room") {
+            if (gender === "male") {
+              startHour < 12
+                ? counts.conference.male.am++
+                : counts.conference.male.pm++;
+            } else {
+              startHour < 12
+                ? counts.conference.female.am++
+                : counts.conference.female.pm++;
+            }
+          } else if (roomName === "Collaboratory Room") {
+            if (gender === "male") {
+              startHour < 12
+                ? counts.collaboratory.male.am++
+                : counts.collaboratory.male.pm++;
+            } else {
+              startHour < 12
+                ? counts.collaboratory.female.am++
+                : counts.collaboratory.female.pm++;
+            }
+          } else if (roomName === "Tutoring Room") {
+            if (gender === "male") {
+              startHour < 12
+                ? counts.tutoring.male.am++
+                : counts.tutoring.male.pm++;
+            } else {
+              startHour < 12
+                ? counts.tutoring.female.am++
+                : counts.tutoring.female.pm++;
+            }
+          }
+        }
+      }
+
+      return counts;
+    };
+
+    const unsubscribeRooms = onValue(roomsRef, (snapshot) => {
+      const allRoomsData = snapshot.val(); // Get all room data for all dates
+      let finalCounts = {
+        conference: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
+        collaboratory: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
+        tutoring: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
+      };
+
+      // Loop through all dates in the data
+      for (const date in allRoomsData) {
+        const roomsDataForDate = allRoomsData[date];
+        const dateCounts = countRooms(roomsDataForDate);
+
+        // Add counts for the current date to the total finalCounts
+        finalCounts.conference.male.am += dateCounts.conference.male.am;
+        finalCounts.conference.male.pm += dateCounts.conference.male.pm;
+        finalCounts.conference.female.am += dateCounts.conference.female.am;
+        finalCounts.conference.female.pm += dateCounts.conference.female.pm;
+
+        finalCounts.collaboratory.male.am += dateCounts.collaboratory.male.am;
+        finalCounts.collaboratory.male.pm += dateCounts.collaboratory.male.pm;
+        finalCounts.collaboratory.female.am +=
+          dateCounts.collaboratory.female.am;
+        finalCounts.collaboratory.female.pm +=
+          dateCounts.collaboratory.female.pm;
+
+        finalCounts.tutoring.male.am += dateCounts.tutoring.male.am;
+        finalCounts.tutoring.male.pm += dateCounts.tutoring.male.pm;
+        finalCounts.tutoring.female.am += dateCounts.tutoring.female.am;
+        finalCounts.tutoring.female.pm += dateCounts.tutoring.female.pm;
+      }
+
+      // Now set the final aggregated room counts
+      setRoomCounts(finalCounts);
+    });
+
+    return () => {
+      unsubscribeRooms();
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchEquipments = async () => {
+      const currentDate = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
+
+      try {
+        // Fetch equipment data for the current date
+        const equipmentsSnapshot = await get(
+          ref(db, `reportsTable/equipments/${currentDate}`)
+        );
+        const equipmentsData = equipmentsSnapshot.val() || {};
+
+        const counts: { [key: string]: number } = {}; // Initialize counts object
+
+        // Fetch the entire courses data at once
+        const coursesSnapshot = await get(ref(db, "courses"));
+        const coursesData = coursesSnapshot.val() || {};
+
+        // Loop through each equipment in the data
+        for (const equipmentId in equipmentsData) {
+          const equipment = equipmentsData[equipmentId];
+          const equipmentName = equipment.equipmentName;
+          const courseIds = equipment.course; // Assuming this is an array of course IDs
+
+          // Fetch course descriptions for each courseId
+          const courseDescriptions = await Promise.all(
+            courseIds.map((courseId: string) => {
+              let courseDescription = "No description available"; // Default if not found
+
+              // Iterate through all departments and find the courseId
+              for (const department in coursesData) {
+                const departmentData = coursesData[department];
+
+                // Check if the courseId exists in the department
+                if (departmentData[courseId]) {
+                  const courseData = departmentData[courseId]; // Get course data
+                  if (courseData && courseData.description) {
+                    courseDescription = courseData.description; // Set description if found
+                    break; // Stop once found
+                  }
+                }
+              }
+
+              return courseDescription;
+            })
+          );
+
+          // Process each course description
+          courseDescriptions.forEach((courseDescription) => {
+            if (courseDescription) {
+              const key = `${courseDescription} - ${equipmentName}`;
+
+              // Increment count for the equipment under the course
+              counts[key] = (counts[key] || 0) + 1;
+            }
+          });
+        }
+
+        // Set the flattened equipment counts
+        setEquipmentCounts(counts);
+      } catch (error) {
+        console.error("Error fetching equipments:", error);
+      }
+    };
+
+    // Call the function
+    fetchEquipments();
+  }, []);
+
+  useEffect(() => {
+    const currentDate = new Date(); // Get the local date
+    const currentDateString = currentDate.toLocaleDateString("en-CA"); // Format it as YYYY-MM-DD
+
+    const roomsRef = ref(db, `reportsTable/rooms/${currentDateString}`);
 
     const previousDate = new Date();
-    previousDate.setDate(previousDate.getDate() - 1);
-    const previousDateString = previousDate.toISOString().split("T")[0];
+    previousDate.setDate(previousDate.getDate() - 1); // Subtract one day
+    const previousDateString = previousDate.toLocaleDateString("en-CA"); // Format previous date as YYYY-MM-DD
+
     const previousRoomsRef = ref(
       db,
       `reportsTable/rooms/${previousDateString}`
@@ -108,7 +392,7 @@ function ReportsTable() {
 
     const countRooms = async (roomsData: any): Promise<Counts> => {
       const counts: Counts = {};
-      const courseSet = new Set<string>(); // This should be declared here
+      const courseSet = new Set<string>();
 
       if (roomsData) {
         for (const roomId in roomsData) {
@@ -116,14 +400,36 @@ function ReportsTable() {
           const startHour = new Date(`1970-01-01T${room.startTime}`).getHours();
           const courseIds = room.course;
 
-          // Fetch course descriptions
+          // Fetch the entire 'courses' node (no department specified)
+          const allCoursesSnapshot = await get(ref(db, `courses`)); // Querying entire 'courses' node
+          const allCoursesData = allCoursesSnapshot.val() || {}; // Fallback to empty if no data
+
+          // Fetch course descriptions for each courseId
           const courseDescriptions = await Promise.all(
-            courseIds.map((courseId: any) =>
-              get(ref(db, `courses/${courseId}`)).then((snapshot) => {
-                const courseData = snapshot.val();
-                return courseData ? courseData.description : null;
-              })
-            )
+            courseIds.map((courseId: any) => {
+              console.log(`Fetching course data for course ID: ${courseId}`);
+
+              let courseDescription = "No description available"; // Default if not found
+
+              // Iterate through all departments and find the courseId
+              for (const department in allCoursesData) {
+                const departmentData = allCoursesData[department];
+
+                // Check if the courseId exists in the department
+                if (departmentData[courseId]) {
+                  const courseData = departmentData[courseId]; // Get course data
+                  if (courseData && courseData.description) {
+                    courseDescription = courseData.description; // Set description if found
+                    break; // Stop once found
+                  }
+                }
+              }
+
+              console.log(
+                `Course Description for ${courseId}: ${courseDescription}`
+              );
+              return courseDescription;
+            })
           );
 
           courseDescriptions.forEach((courseDescription) => {
@@ -135,19 +441,17 @@ function ReportsTable() {
                   startHour < 12 ? "am" : "pm"
                 }`
               );
+
               const time = startHour < 12 ? "am" : "pm"; // Determine AM/PM
               const roomName = room.roomName;
 
-              // Check for duplicate entries before setting state
               setCourseDescriptionsList((prev) => {
-                // Check if the course description already exists in the list
                 const exists = prev.some(
                   (item) =>
                     item.description === courseDescription &&
                     item.time === time &&
                     item.room === roomName
                 );
-                // Only add if it doesn't exist
                 return exists
                   ? prev
                   : [
@@ -176,11 +480,7 @@ function ReportsTable() {
 
               const gender = room.gender;
 
-              // Increment counts based on room and gender
               if (roomName === "Conference Room") {
-                console.log(
-                  `Incrementing Conference counts for ${courseDescription} (${gender}, ${time})`
-                );
                 if (gender === "male") {
                   startHour < 12
                     ? counts[courseDescription].conference.male.am++
@@ -191,9 +491,6 @@ function ReportsTable() {
                     : counts[courseDescription].conference.female.pm++;
                 }
               } else if (roomName === "Collaboratory Room") {
-                console.log(
-                  `Incrementing Collaboratory counts for ${courseDescription} (${gender}, ${time})`
-                );
                 if (gender === "male") {
                   startHour < 12
                     ? counts[courseDescription].collaboratory.male.am++
@@ -204,9 +501,6 @@ function ReportsTable() {
                     : counts[courseDescription].collaboratory.female.pm++;
                 }
               } else if (roomName === "Tutoring Room") {
-                console.log(
-                  `Incrementing Tutoring counts for ${courseDescription} (${gender}, ${time})`
-                );
                 if (gender === "male") {
                   startHour < 12
                     ? counts[courseDescription].tutoring.male.am++
@@ -290,306 +584,11 @@ function ReportsTable() {
     };
   }, []);
 
-  useEffect(() => {
-    const equipmentsRef = ref(db, "equipments");
-
-    const unsubscribe = onValue(equipmentsRef, (snapshot) => {
-      const equipmentsData = snapshot.val();
-      const loadedEquipmentNames: string[] = [];
-
-      if (equipmentsData) {
-        for (const equipmentId in equipmentsData) {
-          const name = equipmentsData[equipmentId].description;
-          loadedEquipmentNames.push(name);
-        }
-      } else {
-        console.log("No equipment data found.");
-      }
-
-      setEquipmentNames(loadedEquipmentNames); // Update state with loaded names
-      setLoading(false);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    const coursesRef = ref(db, "courses");
-
-    // Fetch course names
-    const unsubscribeCourses = onValue(coursesRef, (snapshot) => {
-      const coursesData = snapshot.val();
-      const loadedCourses: string[] = [];
-
-      for (const courseId in coursesData) {
-        const courseDescription = coursesData[courseId].description; // Access the description directly
-        if (courseDescription) {
-          loadedCourses.push(courseDescription);
-        }
-      }
-
-      setLoading(false);
-      setCourses(loadedCourses);
-    });
-
-    return () => {
-      unsubscribeCourses();
-    };
-  }, []);
-
-  useEffect(() => {
-    const currentDate = new Date().toISOString().split("T")[0];
-    const roomsRef = ref(db, `reportsTable/rooms/${currentDate}`);
-
-    const unsubscribeRooms = onValue(roomsRef, (snapshot) => {
-      const roomsData = snapshot.val();
-      const loadedRoomData: any[] = [];
-      let count = 0;
-
-      if (roomsData) {
-        for (const roomId in roomsData) {
-          const room = roomsData[roomId];
-          loadedRoomData.push({
-            course: room.course,
-            startTime: room.startTime,
-            endTime: room.endTime,
-          });
-          count++;
-        }
-      }
-
-      setRoomData(loadedRoomData);
-      setTotalBookings(count);
-    });
-
-    return () => {
-      unsubscribeRooms();
-    };
-  }, []);
-
-  useEffect(() => {
-    const currentDate = new Date().toISOString().split("T")[0];
-    const roomsRef = ref(db, `reportsTable/rooms/${currentDate}`);
-
-    const previousDate = new Date();
-    previousDate.setDate(previousDate.getDate() - 1);
-    const previousDateString = previousDate.toISOString().split("T")[0];
-    const previousRoomsRef = ref(
-      db,
-      `reportsTable/rooms/${previousDateString}`
-    );
-
-    const countRooms = (roomsData: any) => {
-      const counts = {
-        conference: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
-        collaboratory: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
-        tutoring: { male: { am: 0, pm: 0 }, female: { am: 0, pm: 0 } },
-      };
-
-      if (roomsData) {
-        for (const roomId in roomsData) {
-          const room = roomsData[roomId];
-          const startHour = new Date(`1970-01-01T${room.startTime}`).getHours();
-          const roomName = room.roomName;
-          const gender = room.gender;
-
-          if (roomName === "Conference Room") {
-            if (gender === "male") {
-              startHour < 12
-                ? counts.conference.male.am++
-                : counts.conference.male.pm++;
-            } else {
-              startHour < 12
-                ? counts.conference.female.am++
-                : counts.conference.female.pm++;
-            }
-          } else if (roomName === "Collaboratory Room") {
-            if (gender === "male") {
-              startHour < 12
-                ? counts.collaboratory.male.am++
-                : counts.collaboratory.male.pm++;
-            } else {
-              startHour < 12
-                ? counts.collaboratory.female.am++
-                : counts.collaboratory.female.pm++;
-            }
-          } else if (roomName === "Tutoring Room") {
-            if (gender === "male") {
-              startHour < 12
-                ? counts.tutoring.male.am++
-                : counts.tutoring.male.pm++;
-            } else {
-              startHour < 12
-                ? counts.tutoring.female.am++
-                : counts.tutoring.female.pm++;
-            }
-          }
-        }
-      }
-
-      return counts;
-    };
-
-    const unsubscribeRooms = onValue(roomsRef, (snapshot) => {
-      const roomsData = snapshot.val();
-      const currentCounts = countRooms(roomsData);
-
-      // Retrieve previous day's counts
-      onValue(previousRoomsRef, (prevSnapshot) => {
-        const previousData = prevSnapshot.val();
-        const previousCounts = countRooms(previousData);
-
-        // Combine current counts with previous counts
-        const finalCounts = {
-          conference: {
-            male: {
-              am:
-                currentCounts.conference.male.am +
-                previousCounts.conference.male.am,
-              pm:
-                currentCounts.conference.male.pm +
-                previousCounts.conference.male.pm,
-            },
-            female: {
-              am:
-                currentCounts.conference.female.am +
-                previousCounts.conference.female.am,
-              pm:
-                currentCounts.conference.female.pm +
-                previousCounts.conference.female.pm,
-            },
-          },
-          collaboratory: {
-            male: {
-              am:
-                currentCounts.collaboratory.male.am +
-                previousCounts.collaboratory.male.am,
-              pm:
-                currentCounts.collaboratory.male.pm +
-                previousCounts.collaboratory.male.pm,
-            },
-            female: {
-              am:
-                currentCounts.collaboratory.female.am +
-                previousCounts.collaboratory.female.am,
-              pm:
-                currentCounts.collaboratory.female.pm +
-                previousCounts.collaboratory.female.pm,
-            },
-          },
-          tutoring: {
-            male: {
-              am:
-                currentCounts.tutoring.male.am +
-                previousCounts.tutoring.male.am,
-              pm:
-                currentCounts.tutoring.male.pm +
-                previousCounts.tutoring.male.pm,
-            },
-            female: {
-              am:
-                currentCounts.tutoring.female.am +
-                previousCounts.tutoring.female.am,
-              pm:
-                currentCounts.tutoring.female.pm +
-                previousCounts.tutoring.female.pm,
-            },
-          },
-        };
-
-        setRoomCounts(finalCounts);
-      });
-    });
-
-    return () => {
-      unsubscribeRooms();
-    };
-  }, []);
-
-  useEffect(() => {
-    const fetchEquipments = async () => {
-      const currentDate = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
-
-      try {
-        const equipmentsSnapshot = await get(
-          ref(db, `reportsTable/equipments/${currentDate}`)
-        );
-        const equipmentsData = equipmentsSnapshot.val() || {};
-
-        // Reset counts for each course and equipment
-        const counts: { [key: string]: number } = {}; // Flat structure
-
-        // Loop through each equipment in the data
-        for (const equipmentId in equipmentsData) {
-          const equipment = equipmentsData[equipmentId];
-          const equipmentName = equipment.equipmentName;
-          const courseIds = equipment.course; // Assuming this is an array of course IDs
-
-          // Fetch course descriptions
-          const courseDescriptions = await Promise.all(
-            courseIds.map((courseId: any) =>
-              get(ref(db, `courses/${courseId}`)).then((snapshot) => {
-                const courseData = snapshot.val();
-                return courseData ? courseData.description : null;
-              })
-            )
-          );
-
-          courseDescriptions.forEach((courseDescription) => {
-            if (courseDescription) {
-              // Use a combined key of courseDescription and equipmentName
-              const key = `${courseDescription} - ${equipmentName}`;
-
-              // Increment count for the equipment under the course
-              counts[key] = (counts[key] || 0) + 1;
-            }
-          });
-        }
-
-        // Set the flattened equipment counts
-        setEquipmentCounts(counts);
-      } catch (error) {
-        console.error("Error fetching equipments:", error);
-      }
-    };
-
-    // Call the function
-    fetchEquipments();
-  }, []);
-
   const RoomsRenderTable = () => {
-    const currentCounts: Partial<Record<keyof RoomCounts, TimeCounts>> =
-      activeGenderTab === "male"
-        ? {
-            conference: {
-              am: roomCounts.conference.male.am,
-              pm: roomCounts.conference.male.pm,
-            },
-            collaboratory: {
-              am: roomCounts.collaboratory.male.am,
-              pm: roomCounts.collaboratory.male.pm,
-            },
-            tutoring: {
-              am: roomCounts.tutoring.male.am,
-              pm: roomCounts.tutoring.male.pm,
-            },
-          }
-        : {
-            conference: {
-              am: roomCounts.conference.female.am,
-              pm: roomCounts.conference.female.pm,
-            },
-            collaboratory: {
-              am: roomCounts.collaboratory.female.am,
-              pm: roomCounts.collaboratory.female.pm,
-            },
-            tutoring: {
-              am: roomCounts.tutoring.female.am,
-              pm: roomCounts.tutoring.female.pm,
-            },
-          };
+    // Initialize overall totals for each room type
+    let overallConferenceTotal = 0;
+    let overallCollaboratoryTotal = 0;
+    let overallTutoringTotal = 0;
 
     return (
       <table className="min-w-full bg-white border border-gray-300 shadow-md rounded-lg">
@@ -622,74 +621,115 @@ function ReportsTable() {
         </thead>
         <tbody>
           {courses.map((course, idx) => {
-            const conferenceCounts = currentCounts.conference || {
-              am: 0,
-              pm: 0,
-            };
-            const collaboratoryCounts = currentCounts.collaboratory || {
-              am: 0,
-              pm: 0,
-            };
-            const tutoringCounts = currentCounts.tutoring || { am: 0, pm: 0 };
+            // Find the course data by matching the course description (from the Course object)
+            const courseData = courseDescriptionsList.find((item) => {
+              return item.description === course.description;
+            });
 
-            const courseData = courseDescriptionsList.some(
-              (item) => item.description === course
-            );
+            if (courseData) {
+              // Ensure roomCounts for both genders are properly set
+              const conferenceCounts =
+                activeGenderTab === "male"
+                  ? roomCounts.conference.male || { am: 0, pm: 0 }
+                  : roomCounts.conference.female || { am: 0, pm: 0 };
+              const collaboratoryCounts =
+                activeGenderTab === "male"
+                  ? roomCounts.collaboratory.male || { am: 0, pm: 0 }
+                  : roomCounts.collaboratory.female || { am: 0, pm: 0 };
+              const tutoringCounts =
+                activeGenderTab === "male"
+                  ? roomCounts.tutoring.male || { am: 0, pm: 0 }
+                  : roomCounts.tutoring.female || { am: 0, pm: 0 };
 
-            const conferenceTotal = courseData
-              ? conferenceCounts.am + conferenceCounts.pm
-              : 0;
-            const collaboratoryTotal = courseData
-              ? collaboratoryCounts.am + collaboratoryCounts.pm
-              : 0;
-            const tutoringTotal = courseData
-              ? tutoringCounts.am + tutoringCounts.pm
-              : 0;
+              // Calculate the total for each room type (sum of AM and PM)
+              const conferenceTotal = conferenceCounts.am + conferenceCounts.pm;
+              const collaboratoryTotal =
+                collaboratoryCounts.am + collaboratoryCounts.pm;
+              const tutoringTotal = tutoringCounts.am + tutoringCounts.pm;
 
-            return (
-              <tr
-                key={idx}
-                className="text-sm hover:bg-gray-100 transition-colors text-black"
-              >
-                <td className="border px-4 py-2">{course}</td>
-                <td className="border px-4 py-2 text-center">
-                  {courseData ? conferenceCounts.am : 0}
-                </td>
-                <td className="border px-4 py-2 text-center">
-                  {courseData ? conferenceCounts.pm : 0}
-                </td>
-                <td className="border px-4 py-2 text-center font-bold">
-                  {conferenceTotal}
-                </td>
-                <td className="border px-4 py-2 text-center">
-                  {courseData ? collaboratoryCounts.am : 0}
-                </td>
-                <td className="border px-4 py-2 text-center">
-                  {courseData ? collaboratoryCounts.pm : 0}
-                </td>
-                <td className="border px-4 py-2 text-center font-bold">
-                  {collaboratoryTotal}
-                </td>
-                <td className="border px-4 py-2 text-center">
-                  {courseData ? tutoringCounts.am : 0}
-                </td>
-                <td className="border px-4 py-2 text-center">
-                  {courseData ? tutoringCounts.pm : 0}
-                </td>
-                <td className="border px-4 py-2 text-center font-bold">
-                  {" "}
-                  {/* Ensure row for tutoring total */}
-                  {tutoringTotal}
-                </td>
-              </tr>
-            );
+              // Update the overall totals
+              overallConferenceTotal += conferenceTotal;
+              overallCollaboratoryTotal += collaboratoryTotal;
+              overallTutoringTotal += tutoringTotal;
+
+              return (
+                <tr
+                  key={idx}
+                  className="text-sm hover:bg-gray-100 transition-colors text-black"
+                >
+                  <td className="border px-4 py-2">{course.description}</td>
+                  <td className="border px-4 py-2 text-center">
+                    {conferenceCounts.am}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {conferenceCounts.pm}
+                  </td>
+                  <td className="border px-4 py-2 text-center font-bold">
+                    {conferenceTotal}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {collaboratoryCounts.am}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {collaboratoryCounts.pm}
+                  </td>
+                  <td className="border px-4 py-2 text-center font-bold">
+                    {collaboratoryTotal}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {tutoringCounts.am}
+                  </td>
+                  <td className="border px-4 py-2 text-center">
+                    {tutoringCounts.pm}
+                  </td>
+                  <td className="border px-4 py-2 text-center font-bold">
+                    {tutoringTotal}
+                  </td>
+                </tr>
+              );
+            } else {
+              return (
+                <tr
+                  key={idx}
+                  className="text-sm hover:bg-gray-100 transition-colors text-black"
+                >
+                  <td className="border px-4 py-2">{course.description}</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                  <td className="border px-4 py-2 text-center">0</td>
+                </tr>
+              );
+            }
           })}
+
+          {/* Overall Total Row */}
+          <tr className="font-bold text-black bg-green-100">
+            <td className="border px-4 py-2 text-center">Overall Total</td>
+            <td colSpan={3} className="border px-4 py-2 text-center">
+              {overallConferenceTotal}
+            </td>
+            <td colSpan={3} className="border px-4 py-2 text-center">
+              {overallCollaboratoryTotal}
+            </td>
+            <td colSpan={3} className="border px-4 py-2 text-center">
+              {overallTutoringTotal}
+            </td>
+          </tr>
         </tbody>
       </table>
     );
   };
 
   const EquipmentsRenderTable = () => {
+    // Initialize a variable to hold the overall total for each equipment column
+    const columnTotals = Array(equipmentNames.length).fill(0);
+
     return (
       <table className="min-w-full bg-white border border-gray-300 shadow-md rounded-lg">
         <thead className="bg-green-300 text-sm font-bold text-black">
@@ -700,8 +740,7 @@ function ReportsTable() {
                 {name}
               </th>
             ))}
-            <th className="border px-4 py-2">TOTAL NBM</th>{" "}
-            {/* Add Total column */}
+            <th className="border px-4 py-2">TOTAL NBM</th>
           </tr>
         </thead>
         <tbody>
@@ -713,16 +752,17 @@ function ReportsTable() {
                 key={idx}
                 className="text-sm hover:bg-gray-100 transition-colors text-black"
               >
-                <td className="border px-4 py-2">{course}</td>
+                <td className="border px-4 py-2">{course.description}</td>
                 {equipmentNames.map((equipmentName, equipmentIdx) => {
-                  // Create a key for fetching equipment counts based on course and equipment
-                  const key = `${course} - ${equipmentName}`;
+                  // Create a key for fetching equipment counts based on course description and equipment name
+                  const key = `${course.description} - ${equipmentName}`;
 
                   // Get the count for this course and equipment, default to 0 if not found
                   const count = equipmentCounts[key] || 0;
 
-                  // Add the current equipment count to the total for the row
+                  // Add the current equipment count to the course total and the column total
                   totalNBM += count;
+                  columnTotals[equipmentIdx] += count;
 
                   return (
                     <td
@@ -734,11 +774,26 @@ function ReportsTable() {
                   );
                 })}
                 <td className="border px-4 py-2 text-center font-bold">
-                  {totalNBM} {/* Display the total for the current row */}
+                  {totalNBM}
                 </td>
               </tr>
             );
           })}
+          {/* Overall Total Row */}
+          <tr className="font-bold text-black bg-green-100">
+            <td className="border px-4 py-2 text-center">Overall Total</td>
+            {columnTotals.map((total, index) => (
+              <td
+                key={`overall-total-${index}`}
+                className="border px-4 py-2 text-center"
+              >
+                {total}
+              </td>
+            ))}
+            <td className="border px-4 py-2 text-center font-bold">
+              {columnTotals.reduce((sum, total) => sum + total, 0)}
+            </td>
+          </tr>
         </tbody>
       </table>
     );
@@ -880,7 +935,6 @@ function ReportsTable() {
         }
 
         pdf.save("equipmentReport.pdf");
-        await deleteEquipmentReportFromDatabase();
       } catch (error) {
         console.error("Error generating PDF:", error);
       }
@@ -1012,7 +1066,6 @@ function ReportsTable() {
         }
 
         pdf.save("roomsMale.pdf");
-        await deleteMaleRoomsReportFromDatabase();
       } catch (error) {
         console.error("Error generating PDF:", error);
       }
@@ -1133,11 +1186,22 @@ function ReportsTable() {
         }
 
         pdf.save("roomsFemale.pdf");
-        await deleteFemaleRoomsReportFromDatabase();
       } catch (error) {
         console.error("Error generating PDF:", error);
       }
     }
+  };
+
+  const resetBtnFemale = async () => {
+    deleteFemaleRoomsReportFromDatabase();
+  };
+
+  const resetBtnMale = async () => {
+    deleteMaleRoomsReportFromDatabase();
+  };
+
+  const resetBtnEquipment = async () => {
+    deleteEquipmentReportFromDatabase();
   };
 
   const deleteFemaleRoomsReportFromDatabase = async () => {
@@ -1205,6 +1269,18 @@ function ReportsTable() {
     }
   };
 
+  const openModalEquipment = () => {
+    setIsModalOpenEquipment(true);
+  };
+
+  const openModalMale = () => {
+    setIsModalOpenMale(true);
+  };
+
+  const openModalFemale = () => {
+    setIsModalOpenFemale(true);
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
@@ -1244,7 +1320,9 @@ function ReportsTable() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -1453,20 +1531,36 @@ function ReportsTable() {
 
             <div className="flex space-x-4 mt-6">
               {activeGenderTab === "male" && (
-                <button
-                  onClick={downloadMalePDF} // Function to download male students PDF
-                  className="px-4 py-2 rounded-lg font-bold  bg-red-600 text-white"
-                >
-                  Download
-                </button>
+                <>
+                  <button
+                    onClick={downloadMalePDF} // Function to download male students PDF
+                    className="px-4 py-2 rounded-lg font-bold  bg-red-600 text-white"
+                  >
+                    Download
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-lg font-bold  bg-blue-600 text-white"
+                    onClick={() => openModalMale()}
+                  >
+                    Reset
+                  </button>
+                </>
               )}
               {activeGenderTab === "female" && (
-                <button
-                  onClick={downloadFemalePDF} // Function to download female students PDF
-                  className="px-4 py-2 rounded-lg font-bold  bg-red-600 text-white"
-                >
-                  Download
-                </button>
+                <>
+                  <button
+                    onClick={downloadFemalePDF} // Function to download female students PDF
+                    className="px-4 py-2 rounded-lg font-bold  bg-red-600 text-white"
+                  >
+                    Download
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-lg font-bold  bg-blue-600 text-white"
+                    onClick={() => openModalFemale()}
+                  >
+                    Reset
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -1484,9 +1578,90 @@ function ReportsTable() {
             >
               Download
             </button>
+            <button
+              className="ml-4 px-4 py-2 rounded-lg font-bold bg-blue-600 text-white mt-6"
+              onClick={() => openModalEquipment()}
+            >
+              Reset
+            </button>
           </div>
         )}
       </main>
+
+      {/* Delete/Reset Equipment Confirmation Modal */}
+      {isModalOpenEquipment && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 text-black">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm">
+            <h2 className="text-lg font-bold mb-4">
+              Are you sure you want to reset the table?
+            </h2>
+            <div className="flex justify-end">
+              <button
+                onClick={resetBtnEquipment} // Confirm and delete the booking
+                className="py-1 px-3 bg-black text-white rounded hover:bg-red-600 font-bold"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => setIsModalOpenEquipment(false)} // Close the modal
+                className="ml-4 py-1 px-3 bg-gray-300 rounded hover:bg-gray-400 font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete/Reset Male Confirmation Modal */}
+      {isModalOpenMale && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 text-black">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm">
+            <h2 className="text-lg font-bold mb-4">
+              Are you sure you want to reset the table?
+            </h2>
+            <div className="flex justify-end">
+              <button
+                onClick={resetBtnMale} // Confirm and delete the booking
+                className="py-1 px-3 bg-black text-white rounded hover:bg-red-600 font-bold"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => setIsModalOpenMale(false)} // Close the modal
+                className="ml-4 py-1 px-3 bg-gray-300 rounded hover:bg-gray-400 font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete/Reset Female Confirmation Modal */}
+      {isModalOpenFemale && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 text-black">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm">
+            <h2 className="text-lg font-bold mb-4">
+              Are you sure you want to reset the table?
+            </h2>
+            <div className="flex justify-end">
+              <button
+                onClick={resetBtnFemale} // Confirm and delete the booking
+                className="py-1 px-3 bg-black text-white rounded hover:bg-red-600 font-bold"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => setIsModalOpenFemale(false)} // Close the modal
+                className="ml-4 py-1 px-3 bg-gray-300 rounded hover:bg-gray-400 font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

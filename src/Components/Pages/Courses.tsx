@@ -24,6 +24,14 @@ import "react-toastify/dist/ReactToastify.css";
 import Lottie from "lottie-react";
 import loadingAnimation from "../../assets/loadinganimation2.json"; // Path to your Lottie JSON file
 
+interface Course {
+  id: number;
+  description: string;
+  isAvailable: boolean;
+  key: string;
+  department: string; // Add department here
+}
+
 // Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
@@ -46,12 +54,17 @@ function Courses() {
       id: number;
       description: string;
       isAvailable: boolean;
+      department: string;
       key: string;
     }[]
   >([]);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(true); // Loading state
   const [showAddOptions, setShowAddOptions] = useState(true);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("All");
+  const [selectedCount, setSelectedCount] = useState(0);
+  const departments = ["CCS", "COC", "CTEAS", "CBE"];
 
   useEffect(() => {
     const coursesRef = dbRef(db, "courses");
@@ -59,52 +72,79 @@ function Courses() {
     const handleData = (snapshot: any) => {
       const data = snapshot.val();
       if (data) {
-        const coursesList = Object.keys(data).map((key, index) => ({
-          id: index + 1,
-          description: data[key].description,
-          isAvailable: data[key].availability ?? true,
-          key,
-        }));
-        setCourses(coursesList);
+        const allCourses: Course[] = []; // Explicitly define courses as an array of `Course`
+
+        // Departments are fixed: CCS, COC, CTEAS, CBE
+        const departments = ["CCS", "COC", "CTEAS", "CBE"];
+
+        // Loop through each department (which is a key in the courses object)
+        departments.forEach((department) => {
+          // If the department exists in the data, loop through its courses
+          if (data[department]) {
+            Object.keys(data[department]).forEach((courseKey, index) => {
+              const courseData = data[department][courseKey];
+
+              // Construct the course object with the department
+              allCourses.push({
+                id: index + 1,
+                department: courseData.department, // department is now fixed based on the iteration
+                description: courseData.description,
+                isAvailable: courseData.availability ?? true,
+                key: courseKey,
+              });
+            });
+          }
+        });
+
+        setCourses(allCourses); // Set the courses state with typed `Course[]`
       } else {
         setCourses([]);
       }
       setLoading(false); // Set loading to false after data is fetched
     };
 
-    // Set up the listener
+    // Set up the listener to fetch data from all courses (all departments)
     const unsubscribe = onValue(coursesRef, handleData);
 
     // Cleanup listener on unmount
     return () => unsubscribe();
   }, []);
 
-  const updateCourses = async (courseKey: string, currentStatus: boolean) => {
+  const updateCourses = async (
+    courseKey: string,
+    currentStatus: boolean,
+    department: string
+  ) => {
     try {
-      const roomRef = dbRef(db, `courses/${courseKey}`);
-      const newStatus = !currentStatus; // Toggle the current status
-      await update(roomRef, { availability: newStatus });
+      const newStatus = !currentStatus; // Toggle the availability
+      const courseRef = dbRef(db, `courses/${department}/${courseKey}`);
+      await update(courseRef, { availability: newStatus });
 
       // Update local state
       setCourses((prevCourses) =>
-        prevCourses.map((courses) =>
-          courses.key === courseKey
-            ? { ...courses, isAvailable: newStatus }
-            : courses
+        prevCourses.map((course) =>
+          course.key === courseKey
+            ? { ...course, isAvailable: newStatus }
+            : course
         )
       );
     } catch (error) {
-      console.error("Error updating equipments: ", error);
+      console.error("Error updating course: ", error);
     }
   };
 
-  // Function to delete courses data from Realtime Database
-  const deleteCourseData = async (coursesKey: string) => {
+  // Function to delete course data from Realtime Database
+  const deleteCourseData = async (courseKey: string) => {
     try {
-      const coursesRef = dbRef(db, `courses/${coursesKey}`);
+      const courseRef = dbRef(db, `courses/${courseKey}`);
 
       // Remove the course data
-      await remove(coursesRef);
+      await remove(courseRef);
+
+      // Remove from local state
+      setCourses((prevCourses) =>
+        prevCourses.filter((course) => course.key !== courseKey)
+      );
 
       console.log("Course data deleted successfully");
     } catch (error) {
@@ -133,31 +173,35 @@ function Courses() {
     navigate("/AddCourses");
   };
 
-  // Function to handle select all checkbox
-  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.checked) {
-      const allKeys = new Set(courses.map((courses) => courses.key));
-      setSelectedRows(allKeys);
-    } else {
+  const handleSelectAll = () => {
+    if (selectedRows.size === courses.length) {
       setSelectedRows(new Set());
+    } else {
+      const allKeys = new Set(courses.map((course) => course.key));
+      setSelectedRows(allKeys);
     }
   };
 
-  // Function to handle row checkbox change
-  const handleRowCheckboxChange = (coursesKey: string, isChecked: boolean) => {
-    setSelectedRows((prevSelectedRows) => {
-      const updatedSelectedRows = new Set(prevSelectedRows);
-      if (isChecked) {
-        updatedSelectedRows.add(coursesKey);
-      } else {
-        updatedSelectedRows.delete(coursesKey);
-      }
-      return updatedSelectedRows;
-    });
+  const handleRowCheckboxChange = (key: string, isChecked: boolean) => {
+    const newSelectedRows = new Set(selectedRows);
+    if (isChecked) {
+      newSelectedRows.add(key);
+    } else {
+      newSelectedRows.delete(key);
+    }
+    setSelectedRows(newSelectedRows);
+    setSelectedCount(newSelectedRows.size);
   };
 
-  // Calculate number of selected rows
-  const selectedCount = selectedRows.size;
+  const handleDepartmentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedDepartment(e.target.value);
+  };
+
+  // Filter courses by selected department
+  const filteredCourses =
+    selectedDepartment === "All"
+      ? courses
+      : courses.filter((course) => course.department === selectedDepartment);
 
   if (loading) {
     return (
@@ -174,6 +218,15 @@ function Courses() {
       </div>
     );
   }
+
+  const handleDropdownToggle = () => {
+    setDropdownOpen((prev) => !prev);
+  };
+
+  const handleSelection = (key: any, isAvailable: any, department: string) => {
+    updateCourses(key, isAvailable, department); // Pass department along with the key and availability status
+    setDropdownOpen(false); // Close the dropdown after clicking Yes or No
+  };
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -214,7 +267,9 @@ function Courses() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -356,15 +411,33 @@ function Courses() {
         </nav>
       </aside>
 
-      <main className="flex-1 p-6 bg-white overflow-auto max-h-screen">
+      <main className="flex-1 p-6 bg-white overflow-hidden max-h-screen">
         <div className="p-4">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-black">Courses</h1>
+
+            {/* Department Filter Dropdown */}
+            <div>
+              <select
+                value={selectedDepartment}
+                onChange={handleDepartmentChange}
+                className="select select-bordered bg-gray-100 text-black font-bold"
+              >
+                <option value="All">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button onClick={handleAddCourses} className="btn text-white">
               + Add New Courses
             </button>
           </div>
-          <div className="overflow-x-auto text-black">
+
+          <div className="overflow-y-auto scrollbar-hide text-black max-h-[calc(100vh-200px)]">
             <table className="table w-full text-black">
               <thead>
                 <tr>
@@ -373,7 +446,7 @@ function Courses() {
                       type="checkbox"
                       className="checkbox border-black"
                       onChange={handleSelectAll}
-                      checked={selectedRows.size === setCourses.length}
+                      checked={selectedRows.size === filteredCourses.length}
                     />
                   </th>
                   <th className="text-black">ID</th>
@@ -383,53 +456,101 @@ function Courses() {
                 </tr>
               </thead>
               <tbody>
-                {courses.map((courses) => (
-                  <tr key={courses.key}>
+                {filteredCourses.map((course) => (
+                  <tr key={course.key}>
                     <th>
                       <input
                         type="checkbox"
                         className="checkbox border-black"
-                        checked={selectedRows.has(courses.key)}
+                        checked={selectedRows.has(course.key)}
                         onChange={(e) =>
-                          handleRowCheckboxChange(courses.key, e.target.checked)
+                          handleRowCheckboxChange(course.key, e.target.checked)
                         }
                       />
                     </th>
-                    <td>{courses.id}</td>
-                    <td>{courses.description}</td>
-                    <td>{courses.isAvailable ? "Yes" : "No"}</td>
-                    <td>
-                      <button
-                        className="btn btn-sm text-white mr-2"
-                        onClick={() =>
-                          updateCourses(courses.key, courses.isAvailable)
-                        }
+                    <td>{course.id}</td>
+                    <td>{course.description}</td>
+                    <td>{course.isAvailable ? "Yes" : "No"}</td>
+                    <td className="flex items-center">
+                      {/* Dropdown Menu for Update/Delete */}
+                      <div
+                        className={`dropdown dropdown-left dropdown-end ml-2 ${
+                          dropdownOpen ? "open" : ""
+                        }`}
                       >
-                        Update
-                      </button>
-                      <button
-                        className="btn btn-sm btn-error text-white"
-                        onClick={() => deleteCourse(courses)}
-                      >
-                        Delete
-                      </button>
+                        <label
+                          tabIndex={0}
+                          className="btn btn-sm bg-gray-200 p-1 text-black"
+                          onClick={handleDropdownToggle}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </label>
+                        {dropdownOpen && (
+                          <ul
+                            tabIndex={0}
+                            className="dropdown-content menu p-2 shadow bg-gray-200 rounded-lg w-40 max-h-48 overflow-y-auto"
+                          >
+                            <li className="btn btn-sm text-white mb-2">
+                              <button
+                                onClick={() =>
+                                  handleSelection(
+                                    course.key,
+                                    false,
+                                    course.department
+                                  )
+                                }
+                              >
+                                Yes
+                              </button>
+                            </li>
+                            <li className="btn btn-sm text-white mb-2">
+                              <button
+                                onClick={() =>
+                                  handleSelection(
+                                    course.key,
+                                    true,
+                                    course.department
+                                  )
+                                }
+                              >
+                                No
+                              </button>
+                            </li>
+                          </ul>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="flex justify-between mt-4">
-            <span>
-              {selectedCount} of {courses.length} row(s) selected.
+
+          <div className="flex justify-between items-center mt-4">
+            <span className="text-sm">
+              {selectedCount} of {filteredCourses.length} row(s) selected.
             </span>
-            <div>
-              <button className="btn btn-sm mr-2 text-white">Previous</button>
+            <div className="flex gap-2">
+              <button className="btn btn-sm text-white">Previous</button>
               <button className="btn btn-sm text-white">Next</button>
             </div>
           </div>
         </div>
       </main>
+
       <ToastContainer />
     </div>
   );

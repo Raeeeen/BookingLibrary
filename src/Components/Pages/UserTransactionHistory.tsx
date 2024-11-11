@@ -216,7 +216,9 @@ function UserTransactionHistory() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Dashboard" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
             <li className="mb-4 bg-green-800 border-2 border-green-600 rounded-full p-1">

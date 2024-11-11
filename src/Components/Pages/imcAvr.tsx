@@ -22,7 +22,6 @@ import coursesLogo from "../../assets/courses.png";
 import loginHistoryLogo from "../../assets/loginhistory.png";
 import "react-datepicker/dist/react-datepicker.css";
 import UserSelection from "./BorrowedUserSelection";
-import CourseSelection from "./CourseSelection";
 import EquipmentSelection from "./EquipmentSelection";
 import QRCode from "qrcode";
 import { getStorage, ref, uploadString } from "firebase/storage";
@@ -76,13 +75,14 @@ const imcAvr: React.FC = () => {
   const [selectedEquipments, setSelectedEquipments] = useState<string[]>([]);
   const [showEquipmentsSelection, setShowEquipmentsSelection] = useState(false);
   const [courses, setCourses] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [showCourseSelection, setShowCourseSelection] = useState(false);
+    { id: string; name: string; description: string; department: string }[]
+  >([]);
   const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<string>(""); // For current selection
+  const departments = ["CCS", "COC", "CTEAS", "CBE"];
+  const [filteredCourses, setFilteredCourses] = useState<any[]>([]); // Store filtered courses based on department
 
   // Firebase configuration
   const firebaseConfig = {
@@ -151,27 +151,53 @@ const imcAvr: React.FC = () => {
       const coursesRef = dbRef(db, "courses");
       const snapshot = await get(coursesRef);
       const data = snapshot.val();
+
       const fetchCourses: {
         id: string;
         name: string;
         description: string;
+        department: string;
       }[] = [];
 
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchCourses.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
+      // Loop through departments and courses
+      for (const dept in data) {
+        if (departments.includes(dept)) {
+          const departmentCourses = data[dept];
+
+          // Loop through courses in the department
+          for (const key in departmentCourses) {
+            const course = departmentCourses[key];
+
+            // Only push courses that are available
+            if (course.availability === true) {
+              fetchCourses.push({
+                id: key,
+                name: course.name || "", // Add name if available in the data
+                description: course.description || "",
+                department: dept,
+              });
+            }
+          }
         }
       }
 
-      setCourses(fetchCourses);
+      setCourses(fetchCourses); // Store all fetched courses
     };
 
     fetchCourses();
-  }, [db]);
+  }, []);
+
+  // Filter courses when department changes
+  useEffect(() => {
+    if (department) {
+      const filtered = courses.filter(
+        (course) => course.department === department
+      );
+      setFilteredCourses(filtered); // Set filtered courses
+    } else {
+      setFilteredCourses(courses); // Show all courses if no department is selected
+    }
+  }, [department, courses]);
 
   useEffect(() => {
     // Fetch booked slots
@@ -208,7 +234,7 @@ const imcAvr: React.FC = () => {
       return;
     }
 
-    if (selectedCourses.length === 0) {
+    if (selectedCourse.length === 0) {
       toast.error("Please select at least one Course.");
       return;
     }
@@ -235,15 +261,6 @@ const imcAvr: React.FC = () => {
 
     if (!date) {
       toast.error("Please select a date.");
-      return;
-    }
-
-    // Ensure no undefined values in selectedCourses
-    const validCourses = selectedCourses.filter(
-      (course) => course !== undefined && course !== null
-    );
-    if (validCourses.length === 0) {
-      toast.error("One or more courses are invalid.");
       return;
     }
 
@@ -313,19 +330,24 @@ const imcAvr: React.FC = () => {
     }
 
     // Check if the new booking overlaps with any existing bookings
+    // Check if the time slot already exists in the database
+    const existingBookingsRef = dbRef(db, "bookrooms");
+    const existingBookingsSnapshot = await get(existingBookingsRef);
+    const existingBookings = existingBookingsSnapshot.val();
+
+    // Check if the new booking overlaps with any existing bookings
     const isOverlapping = bookedSlots.some((slot) => {
       const slotStart = new Date(
         new Date(slot.start).getTime() -
           new Date(slot.start).getTimezoneOffset() * 60000 +
           8 * 3600000
-      ); // Ensure slot.start is adjusted to UTC+8
+      );
       const slotEnd = new Date(
         new Date(slot.end).getTime() -
           new Date(slot.end).getTimezoneOffset() * 60000 +
           8 * 3600000
-      ); // Ensure slot.end is adjusted to UTC+8
+      );
 
-      // Overlapping condition: Start time before existing end time AND end time after existing start time
       return (
         slotStart.toDateString() === startTimeDateUTC8.toDateString() &&
         startTimeDateUTC8 < slotEnd &&
@@ -333,16 +355,26 @@ const imcAvr: React.FC = () => {
       );
     });
 
+    // Log and return if overlapping
     if (isOverlapping) {
       toast.error("The selected time slot overlaps with an existing booking.");
       return;
     }
 
-    // Check if the time slot already exists in the database
-    const existingBookingsRef = dbRef(db, "bookrooms");
-    const existingBookingsSnapshot = await get(existingBookingsRef);
-    const existingBookings = existingBookingsSnapshot.val();
+    // Step 1: Retrieve names for all selected equipment IDs
+    const equipmentNamesPromises = selectedEquipments.map(
+      async (equipmentId) => {
+        const equipmentRef = dbRef(db, `equipments/${equipmentId}/description`);
+        const equipmentSnapshot = await get(equipmentRef);
+        return equipmentSnapshot.val(); // This should return the equipment name
+      }
+    );
 
+    // Wait for all promises to resolve
+    const equipmentNames = await Promise.all(equipmentNamesPromises);
+    console.log("Equipment Names from Selected Equipments:", equipmentNames); // Log names for debugging
+
+    // Check if the time slot already exists for the room
     if (existingBookings) {
       const isTimeSlotTaken = Object.values(existingBookings).some(
         (booking: any) => {
@@ -369,7 +401,57 @@ const imcAvr: React.FC = () => {
 
       if (isTimeSlotTaken) {
         toast.error("This time slot is already booked.");
-        return;
+        return; // Exit if the time slot is taken
+      }
+    }
+
+    // Step 3: Check selected equipments against the booked equipment
+    const equipmentBookingsRef = dbRef(db, "bookequipments");
+    const equipmentBookingsSnapshot = await get(equipmentBookingsRef);
+    const equipmentBookings = equipmentBookingsSnapshot.val();
+
+    if (equipmentBookings) {
+      console.log("Equipment Bookings from Database:", equipmentBookings); // Log the fetched equipment bookings
+
+      const isTimeSlotTakenForEquipments = equipmentNames.some(
+        (equipmentName) => {
+          console.log("Checking availability for equipment:", equipmentName); // Log each equipment being checked
+
+          const filteredEquipmentBookings = Object.values(
+            equipmentBookings
+          ).filter((booking: any) => booking.equipmentName === equipmentName);
+
+          // Check if any booking overlaps with the desired time slot
+          return filteredEquipmentBookings.some((booking: any) => {
+            const bookingDateUTC8 = new Date(
+              new Date(booking.date).getTime() -
+                new Date(booking.date).getTimezoneOffset() * 60000 +
+                8 * 3600000
+            )
+              .toISOString()
+              .split("T")[0];
+
+            return (
+              bookingDateUTC8 ===
+                startTimeDateUTC8.toISOString().split("T")[0] &&
+              booking.startTime ===
+                `${startHours24.toString().padStart(2, "0")}:${startMinutes24
+                  .toString()
+                  .padStart(2, "0")}` &&
+              booking.endTime ===
+                `${endHours24.toString().padStart(2, "0")}:${endMinutes24
+                  .toString()
+                  .padStart(2, "0")}`
+            );
+          });
+        }
+      );
+
+      if (isTimeSlotTakenForEquipments) {
+        toast.error(
+          "One or more selected equipments are already booked during this time."
+        );
+        return; // Exit if any equipment is booked
       }
     }
 
@@ -391,7 +473,7 @@ const imcAvr: React.FC = () => {
       borrowedBy: selectedUsers,
       purpose: purpose,
       department: department,
-      course: validCourses,
+      course: Array.isArray(selectedCourse) ? selectedCourse : [selectedCourse], // Convert to array
       subject: subject,
       equipments: selectedEquipments, // Save selected equipments
       gender: gender,
@@ -400,17 +482,53 @@ const imcAvr: React.FC = () => {
     // Reference to the bookrooms node
     const bookingRef = dbRef(db, `bookrooms/${roomId}`);
 
+    // Generate booking data for each equipment
+    const selectedequipmentNamesPromises = selectedEquipments.map(
+      async (equipmentId) => {
+        const equipmentRef = dbRef(db, `equipments/${equipmentId}/description`);
+        const equipmentSnapshot = await get(equipmentRef);
+        return { id: equipmentId, name: equipmentSnapshot.val() };
+      }
+    );
+
+    // Wait for all promises to resolve
+    const equipmentData = await Promise.all(selectedequipmentNamesPromises);
+
     try {
+      // Loop through each equipment in selectedEquipments
+      for (const { name: equipmentName } of equipmentData) {
+        const randomId = Math.floor(1000 + Math.random() * 9000).toString();
+
+        // Define booking data specific to each equipment
+        const selectedEquipmentsData = {
+          equipmentName,
+          studentsSelected: selectedStudents,
+          date: formattedDate,
+          startTime: `${startHours24
+            .toString()
+            .padStart(2, "0")}:${startMinutes24.toString().padStart(2, "0")}`,
+          endTime: `${endHours24.toString().padStart(2, "0")}:${endMinutes24
+            .toString()
+            .padStart(2, "0")}`,
+          borrowedBy: selectedUsers,
+          purpose,
+          department,
+          course: Array.isArray(selectedCourse)
+            ? selectedCourse
+            : [selectedCourse],
+          subject,
+        };
+
+        // Reference to bookequipments node for this specific equipment
+        const equipmentBookingRef = dbRef(db, `bookequipments/${randomId}`);
+
+        // Save booking data to Firebase for each equipment
+        await set(equipmentBookingRef, selectedEquipmentsData);
+        await incrementEquipmentUsed(equipmentName);
+      }
+
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
-
-      // Update equipment availability to false without removing other fields
-      for (const equipmentId of selectedEquipments) {
-        const equipmentRef = dbRef(db, `equipments/${equipmentId}`);
-        const equipmentSnapshot = await get(equipmentRef);
-        const equipmentData = equipmentSnapshot.val();
-        await set(equipmentRef, { ...equipmentData, availability: false });
-      }
 
       // Generate QR code
       const qrCodeData = `Room Name: ${roomTitle}, Room ID: ${roomId}, Students Selected: ${selectedStudents.join(
@@ -420,9 +538,11 @@ const imcAvr: React.FC = () => {
         bookingData.endTime
       }, Borrowed By: ${selectedUsers.join(
         ", "
-      )}, Purpose: ${purpose}, Department: ${department}, Course: ${validCourses.join(
-        ", "
-      )}, Subject: ${subject}, Gender: ${gender}`;
+      )}, Purpose: ${purpose}, Department: ${department}, Course: ${
+        Array.isArray(selectedCourse)
+          ? selectedCourse
+          : [selectedCourse].join(", ")
+      }, Subject: ${subject}, Gender: ${gender}`;
 
       const qrCodeUrl = await QRCode.toDataURL(qrCodeData);
 
@@ -436,6 +556,19 @@ const imcAvr: React.FC = () => {
       await uploadString(qrCodeRef, qrCodeUrl.split(",")[1], "base64", {
         contentType: "image/png",
       });
+
+      // Call incrementEquipmentUsed for each selected equipment ID
+      await Promise.all(
+        selectedEquipments.map(async (equipmentId) => {
+          console.log(
+            `Attempting to increment count for equipment ID: ${equipmentId}`
+          );
+          await incrementEquipmentUsed(equipmentId);
+          console.log(
+            `Successfully incremented count for equipment ID: ${equipmentId}`
+          );
+        })
+      );
 
       toast.success("Room booked successfully!");
       setTimeout(() => {
@@ -460,6 +593,40 @@ const imcAvr: React.FC = () => {
       toast.error(
         "An error occurred while booking the room. Please try again."
       );
+    }
+  };
+
+  // Function to increment equipmentUsed count by equipment ID
+  const incrementEquipmentUsed = async (equipmentId: string) => {
+    const db = getDatabase();
+
+    console.log(`Fetching equipment details for ID: ${equipmentId}`);
+
+    const equipmentRef = dbRef(db, `equipments/${equipmentId}`);
+
+    try {
+      const equipmentSnapshot = await get(equipmentRef);
+      const equipmentData = equipmentSnapshot.val();
+
+      if (equipmentData) {
+        const { description } = equipmentData;
+        const currentCount = equipmentData.equipmentUsed || 0; // Default to 0 if undefined
+        const newCount = currentCount + 1; // Increment the count
+
+        // Update the equipment entry in the database
+        await set(equipmentRef, {
+          ...equipmentData,
+          equipmentUsed: newCount,
+        });
+
+        console.log(
+          `Equipment used count for "${description}" (ID: ${equipmentId}) updated to ${newCount}.`
+        );
+      } else {
+        console.error(`No equipment found with ID: "${equipmentId}"`);
+      }
+    } catch (error) {
+      console.error("Error incrementing equipmentUsed count:", error);
     }
   };
 
@@ -498,15 +665,12 @@ const imcAvr: React.FC = () => {
     setShowEquipmentsSelection(false);
   };
 
-  const handleSelectCourses = (selected: string[]) => {
-    setSelectedCourses(selected);
-    setShowCourseSelection(false);
-  };
-
   // Handle show modals
   const openBorrowedByModal = () => setShowBorrowedBySelection(true);
   const openEquipmentsModal = () => setShowEquipmentsSelection(true);
-  const openCourseModal = () => setShowCourseSelection(true);
+
+  // Set the minimum date for booking to the current date
+  const minBookingDate = new Date();
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -547,7 +711,9 @@ const imcAvr: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -717,10 +883,10 @@ const imcAvr: React.FC = () => {
                       type="text"
                       value={roomId}
                       readOnly
-                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                      className="shadow appearance-none border bg-gray-200 rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     />
                   </div>
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="department"
                       className="block text-black text-sm font-bold mb-2"
@@ -734,10 +900,11 @@ const imcAvr: React.FC = () => {
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
                       <option value="">Select a department</option>
-                      <option value="CCS">CCS</option>
-                      <option value="CTEAS">CTEAS</option>
-                      <option value="CBE">CBE</option>
-                      <option value="COC">COC</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -745,30 +912,21 @@ const imcAvr: React.FC = () => {
                       htmlFor="course"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      Course:
+                      Program:
                     </label>
-                    <button
-                      type="button"
-                      onClick={openCourseModal}
-                      className="p-2 bg-black text-white rounded"
+                    <select
+                      id="course"
+                      value={selectedCourse} // This should hold the ID of the selected course
+                      onChange={(e) => setSelectedCourse(e.target.value)} // Update the selected course ID
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
-                      Select Course
-                    </button>
-                    {selectedCourses.length > 0 && (
-                      <ul className="mt-3">
-                        {selectedCourses.map((coursesId, index) => {
-                          return (
-                            <li
-                              key={index}
-                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                            >
-                              {courses.find((u) => u.id === coursesId)
-                                ?.description || coursesId}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                      <option value="">Select a Program</option>
+                      {filteredCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label
@@ -789,20 +947,28 @@ const imcAvr: React.FC = () => {
                 <div className="w-full md:w-1/2 pl-2">
                   {" "}
                   {/* Right side */}
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="purpose"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
                       Purpose:
                     </label>
-                    <input
-                      type="text"
+                    <select
                       id="purpose"
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                    />
+                    >
+                      <option value="">Select Purpose</option>
+                      <option value="Meetings">Meetings</option>
+                      <option value="Discussions">Discussions</option>
+                      <option value="Workshops">Workshops</option>
+                      <option value="Presentations">Presentations</option>
+                      <option value="Training">Training</option>
+                      <option value="Reporting">Reporting</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                   <div>
                     <label
@@ -884,7 +1050,6 @@ const imcAvr: React.FC = () => {
 
               {/* Date, Start Time, and End Time in the Same Line */}
               <div className="flex flex-wrap mb-4 items-center">
-                {" "}
                 {/* Flex container for alignment */}
                 <div className="w-full md:w-1/3 pr-2">
                   <div className="mb-4">
@@ -898,6 +1063,7 @@ const imcAvr: React.FC = () => {
                       id="date"
                       selected={date}
                       onChange={handleDateChange}
+                      minDate={minBookingDate} // Set the minimum selectable date
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                       dateFormat="yyyy-MM-dd"
                     />
@@ -1023,16 +1189,6 @@ const imcAvr: React.FC = () => {
             selectedEquipments={selectedEquipments}
             onSelect={handleSelectEquipments}
             onCancel={() => setShowEquipmentsSelection(false)}
-          />
-        </div>
-      )}
-      {showCourseSelection && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <CourseSelection
-            courses={courses}
-            selectedCourses={selectedCourses}
-            onSelect={handleSelectCourses}
-            onCancel={() => setShowCourseSelection(false)}
           />
         </div>
       )}

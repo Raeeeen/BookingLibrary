@@ -66,6 +66,7 @@ const TutoringAvailableTable: React.FC = () => {
   const roomTitle = "Tutoring Room";
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Firebase configuration
   const firebaseConfig = {
@@ -216,6 +217,16 @@ const TutoringAvailableTable: React.FC = () => {
     filter === "Available" ? table.available : !table.available
   );
 
+  // Filter `filteredEquipments` by the search term and availability
+  const searchFilteredTables = filteredTables.filter((table) => {
+    const matchesSearch = table.title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesAvailability =
+      filter === "Available" ? table.available : !table.available;
+    return matchesSearch && matchesAvailability;
+  });
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
@@ -263,7 +274,9 @@ const TutoringAvailableTable: React.FC = () => {
                   alt="Book/Borrow"
                   className="h-6 w-6 text-white"
                 />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -423,6 +436,13 @@ const TutoringAvailableTable: React.FC = () => {
             Tutoring Room Tables
           </h1>
           <div className="mb-4 flex space-x-4">
+            <input
+              type="text"
+              placeholder="Search Tables..."
+              className="input input-bordered w-full max-w-xs"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
             <button
               className={`btn ${
                 filter === "Available" ? "btn-accent text-white" : ""
@@ -441,7 +461,7 @@ const TutoringAvailableTable: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTables.map((table, index) => (
+            {searchFilteredTables.map((table, index) => (
               <TableCard
                 key={index}
                 title={table.title}

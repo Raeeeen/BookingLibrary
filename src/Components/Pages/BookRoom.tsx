@@ -19,7 +19,6 @@ import { FirebaseApp, initializeApp } from "firebase/app";
 import { ToastContainer, toast } from "react-toastify";
 import coursesLogo from "../../assets/courses.png";
 import "react-toastify/dist/ReactToastify.css";
-import CourseSelection from "./CourseSelection";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import loginHistoryLogo from "../../assets/loginhistory.png";
@@ -65,13 +64,14 @@ const BookRoom: React.FC = () => {
   const [showBorrowedBySelection, setShowBorrowedBySelection] = useState(false);
   const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const [courses, setCourses] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [showCourseSelection, setShowCourseSelection] = useState(false);
+    { id: string; name: string; description: string; department: string }[]
+  >([]);
   const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<string>(""); // For current selection
+  const departments = ["CCS", "COC", "CTEAS", "CBE"];
+  const [filteredCourses, setFilteredCourses] = useState<any[]>([]); // Store filtered courses based on department
 
   // Firebase configuration
   const firebaseConfig = {
@@ -113,27 +113,53 @@ const BookRoom: React.FC = () => {
       const coursesRef = dbRef(db, "courses");
       const snapshot = await get(coursesRef);
       const data = snapshot.val();
+
       const fetchCourses: {
         id: string;
         name: string;
         description: string;
+        department: string;
       }[] = [];
 
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchCourses.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
+      // Loop through departments and courses
+      for (const dept in data) {
+        if (departments.includes(dept)) {
+          const departmentCourses = data[dept];
+
+          // Loop through courses in the department
+          for (const key in departmentCourses) {
+            const course = departmentCourses[key];
+
+            // Only push courses that are available
+            if (course.availability === true) {
+              fetchCourses.push({
+                id: key,
+                name: course.name || "", // Add name if available in the data
+                description: course.description || "",
+                department: dept,
+              });
+            }
+          }
         }
       }
 
-      setCourses(fetchCourses);
+      setCourses(fetchCourses); // Store all fetched courses
     };
 
     fetchCourses();
-  }, [db]);
+  }, []);
+
+  // Filter courses when department changes
+  useEffect(() => {
+    if (department) {
+      const filtered = courses.filter(
+        (course) => course.department === department
+      );
+      setFilteredCourses(filtered); // Set filtered courses
+    } else {
+      setFilteredCourses(courses); // Show all courses if no department is selected
+    }
+  }, [department, courses]);
 
   useEffect(() => {
     // Fetch booked slots
@@ -166,16 +192,16 @@ const BookRoom: React.FC = () => {
     }
 
     if (selectedUsers.length === 0) {
-      toast.error("Please select at least one students.");
+      toast.error("Please select at least one student.");
       return;
     }
 
     if (selectedStudents.length === 0) {
-      toast.error("Please select at least one students.");
+      toast.error("Please select at least one student.");
       return;
     }
 
-    if (selectedCourses.length === 0) {
+    if (selectedCourse.length === 0) {
       toast.error("Please select at least one Course.");
       return;
     }
@@ -197,20 +223,6 @@ const BookRoom: React.FC = () => {
 
     if (!gender) {
       toast.error("Please select gender.");
-      return;
-    }
-
-    if (!date) {
-      toast.error("Please select a date.");
-      return;
-    }
-
-    // Ensure no undefined values in selectedCourses
-    const validCourses = selectedCourses.filter(
-      (course) => course !== undefined && course !== null
-    );
-    if (validCourses.length === 0) {
-      toast.error("One or more courses are invalid.");
       return;
     }
 
@@ -273,6 +285,23 @@ const BookRoom: React.FC = () => {
         8 * 3600000
     );
 
+    // Get the current local time from the PC
+    const nowLocal = new Date(); // This will give you the current time according to your PC's timezone
+    console.log("Current Time (Local):", nowLocal);
+    console.log("Selected Start Time (Local):", startTimeDateUTC8);
+
+    // Check if the selected start time is in the past
+    if (startTimeDateUTC8 < nowLocal) {
+      toast.error("The selected start time is in the past.");
+      return;
+    }
+
+    // Check if the start time is the same as the current time
+    if (startTimeDateUTC8.getTime() === nowLocal.getTime()) {
+      toast.error("The selected start time cannot be the current time.");
+      return;
+    }
+
     // Check if the start time is before the end time
     if (startTimeDateUTC8 >= endTimeDateUTC8) {
       toast.error("End time must be after start time.");
@@ -313,37 +342,40 @@ const BookRoom: React.FC = () => {
       return;
     }
 
-    // Check if the time slot already exists in the database
+    // Retrieve only bookings for the selected room
     const existingBookingsRef = dbRef(db, "bookrooms");
     const existingBookingsSnapshot = await get(existingBookingsRef);
     const existingBookings = existingBookingsSnapshot.val();
 
     if (existingBookings) {
-      const isTimeSlotTaken = Object.values(existingBookings).some(
-        (booking: any) => {
-          const bookingDateUTC8 = new Date(
-            new Date(booking.date).getTime() -
-              new Date(booking.date).getTimezoneOffset() * 60000 +
-              8 * 3600000
-          )
-            .toISOString()
-            .split("T")[0];
-          return (
-            bookingDateUTC8 === startTimeDateUTC8.toISOString().split("T")[0] &&
-            booking.startTime ===
-              `${startHours24.toString().padStart(2, "0")}:${startMinutes24
-                .toString()
-                .padStart(2, "0")}` &&
-            booking.endTime ===
-              `${endHours24.toString().padStart(2, "0")}:${endMinutes24
-                .toString()
-                .padStart(2, "0")}`
-          );
-        }
+      const filteredRoomBookings = Object.values(existingBookings).filter(
+        (booking: any) => booking.roomName === roomTitle
       );
 
+      const isTimeSlotTaken = filteredRoomBookings.some((booking: any) => {
+        const bookingDateUTC8 = new Date(
+          new Date(booking.date).getTime() -
+            new Date(booking.date).getTimezoneOffset() * 60000 +
+            8 * 3600000
+        )
+          .toISOString()
+          .split("T")[0];
+
+        return (
+          bookingDateUTC8 === startTimeDateUTC8.toISOString().split("T")[0] &&
+          booking.startTime ===
+            `${startHours24.toString().padStart(2, "0")}:${startMinutes24
+              .toString()
+              .padStart(2, "0")}` &&
+          booking.endTime ===
+            `${endHours24.toString().padStart(2, "0")}:${endMinutes24
+              .toString()
+              .padStart(2, "0")}`
+        );
+      });
+
       if (isTimeSlotTaken) {
-        toast.error("This time slot is already booked.");
+        toast.error("This time slot is already booked for the selected room.");
         return;
       }
     }
@@ -366,7 +398,7 @@ const BookRoom: React.FC = () => {
       borrowedBy: selectedUsers,
       purpose: purpose,
       department: department,
-      course: validCourses,
+      course: Array.isArray(selectedCourse) ? selectedCourse : [selectedCourse], // Convert to array
       subject: subject,
       gender: gender,
     };
@@ -387,9 +419,11 @@ const BookRoom: React.FC = () => {
         bookingData.startTime
       }, End Time: ${bookingData.endTime}, Borrowed By: ${selectedUsers.join(
         ", "
-      )}, Purpose: ${purpose}, Department: ${department}, Course: ${validCourses.join(
-        ", "
-      )}, Subject: ${subject}, Gender: ${gender}`;
+      )}, Purpose: ${purpose}, Department: ${department}, Course: ${
+        Array.isArray(selectedCourse)
+          ? selectedCourse
+          : [selectedCourse].join(", ")
+      }, Subject: ${subject}, Gender: ${gender}`;
 
       const qrCodeUrl = await QRCode.toDataURL(qrCodeData);
 
@@ -412,7 +446,6 @@ const BookRoom: React.FC = () => {
       }, 2000);
 
       // Clear form fields after successful submission
-      setDate(null);
       setStudents([]);
       setStudentName("");
       setSelectedUsers([]);
@@ -529,15 +562,12 @@ const BookRoom: React.FC = () => {
     setShowStudentsSelection(false);
   };
 
-  const handleSelectCourses = (selected: string[]) => {
-    setSelectedCourses(selected);
-    setShowCourseSelection(false);
-  };
-
   // Handle show modals
   const openBorrowedByModal = () => setShowBorrowedBySelection(true);
   const openStudentsModal = () => setShowStudentsSelection(true);
-  const openCourseModal = () => setShowCourseSelection(true);
+
+  // Set the minimum date for booking to the current date
+  const minBookingDate = new Date();
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -578,7 +608,9 @@ const BookRoom: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -746,9 +778,10 @@ const BookRoom: React.FC = () => {
                       type="text"
                       value={roomId}
                       readOnly
-                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                      className="shadow appearance-none border bg-gray-200 rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     />
                   </div>
+
                   <div className="mb-4">
                     <label
                       htmlFor="department"
@@ -763,46 +796,36 @@ const BookRoom: React.FC = () => {
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
                       <option value="">Select a department</option>
-                      <option value="CCS">CCS</option>
-                      <option value="CTEAS">CTEAS</option>
-                      <option value="CBE">CBE</option>
-                      <option value="COC">COC</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  <div className="mb-4">
+
+                  <div>
                     <label
-                      htmlFor="courses"
-                      className="block text-black text-sm font-bold mb-2"
+                      htmlFor="course"
+                      className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      Course:
+                      Program:
                     </label>
-                    <button
-                      type="button"
-                      onClick={openCourseModal}
-                      className="p-2 bg-black text-white rounded"
+                    <select
+                      id="course"
+                      value={selectedCourse} // This should hold the ID of the selected course
+                      onChange={(e) => setSelectedCourse(e.target.value)} // Update the selected course ID
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
-                      Select Course
-                    </button>
-                    {selectedCourses.length > 0 && (
-                      <ul className="mt-3 max-h-40 overflow-y-auto">
-                        {selectedCourses.slice(0, 5).map((coursesId, index) => (
-                          <li
-                            key={index}
-                            className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                          >
-                            {courses.find((u) => u.id === coursesId)
-                              ?.description || coursesId}
-                          </li>
-                        ))}
-                        {selectedCourses.length > 5 && (
-                          <li className="text-gray-500 text-sm">
-                            + {selectedCourses.length - 5} more...
-                          </li>
-                        )}
-                      </ul>
-                    )}
+                      <option value="">Select a Program</option>
+                      {filteredCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="mb-4">
+                  <div className="mb-4 mt-4">
                     <label
                       htmlFor="subject"
                       className="block text-black text-sm font-bold mb-2"
@@ -827,14 +850,23 @@ const BookRoom: React.FC = () => {
                     >
                       Purpose:
                     </label>
-                    <input
-                      type="text"
+                    <select
                       id="purpose"
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                    />
+                    >
+                      <option value="">Select Purpose</option>
+                      <option value="Meetings">Meetings</option>
+                      <option value="Discussions">Discussions</option>
+                      <option value="Workshops">Workshops</option>
+                      <option value="Presentations">Presentations</option>
+                      <option value="Training">Training</option>
+                      <option value="Reporting">Reporting</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
+
                   <div className="mb-4">
                     <label
                       htmlFor="gender"
@@ -926,6 +958,7 @@ const BookRoom: React.FC = () => {
                       id="date"
                       selected={date}
                       onChange={handleDateChange}
+                      minDate={minBookingDate} // Set the minimum selectable date
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                       dateFormat="yyyy-MM-dd"
                     />
@@ -1052,16 +1085,6 @@ const BookRoom: React.FC = () => {
             selectedUsers={selectedStudents}
             onSelect={handleSelectStudents}
             onCancel={() => setShowStudentsSelection(false)}
-          />
-        </div>
-      )}
-      {showCourseSelection && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <CourseSelection
-            courses={courses}
-            selectedCourses={selectedCourses}
-            onSelect={handleSelectCourses}
-            onCancel={() => setShowCourseSelection(false)}
           />
         </div>
       )}

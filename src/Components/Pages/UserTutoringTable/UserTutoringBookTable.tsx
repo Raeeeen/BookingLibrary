@@ -19,9 +19,10 @@ import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import UserSelection from "../BorrowedUserSelection";
-import CourseSelection from "./../CourseSelection";
-import { getAuth } from "firebase/auth";
+import { getAuth, User } from "firebase/auth";
 import AddStudentsUserSelection from "../AddStudentsUserSelection";
+import Lottie from "lottie-react";
+import loadingAnimation from "../../../assets/loadinganimation2.json";
 
 const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
@@ -61,12 +62,15 @@ const UserTutoringBookTable: React.FC = () => {
   const [showStudentsSelection, setShowStudentsSelection] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [courses, setCourses] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [showCourseSelection, setShowCourseSelection] = useState(false);
+    { id: string; name: string; description: string; department: string }[]
+  >([]);
   const handleDateChange = (date: any) => setDate(date);
   const navigate = useNavigate();
+  const [selectedCourse, setSelectedCourse] = useState<string>(""); // For current selection
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const departments = ["CCS", "COC", "CTEAS", "CBE"];
+  const [filteredCourses, setFilteredCourses] = useState<any[]>([]); // Store filtered courses based on department
 
   // Firebase configuration
   const firebaseConfig = {
@@ -85,13 +89,19 @@ const UserTutoringBookTable: React.FC = () => {
   const auth = getAuth(app);
 
   useEffect(() => {
-    // Fetch the current logged-in user ID
-    const user = auth.currentUser;
-    if (user) {
-      setCurrentUserId(user.uid);
-      setSelectedUsers([user.uid]); // Set the current user as the selected user
-    }
-  }, [auth]);
+    const unsubscribe = auth.onAuthStateChanged((authUser) => {
+      if (authUser) {
+        setUser(authUser); // Save the authenticated user to the state
+        setSelectedUsers([authUser.uid]); // Set the current user as the selected user
+        setCurrentUserId(authUser.uid);
+      } else {
+        setUser(null); // Clear user state if no one is logged in
+      }
+      setLoading(false); // Stop loading once the user state is set
+    });
+
+    return () => unsubscribe(); // Clean up the listener
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -118,27 +128,53 @@ const UserTutoringBookTable: React.FC = () => {
       const coursesRef = dbRef(db, "courses");
       const snapshot = await get(coursesRef);
       const data = snapshot.val();
+
       const fetchCourses: {
         id: string;
         name: string;
         description: string;
+        department: string;
       }[] = [];
 
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchCourses.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
+      // Loop through departments and courses
+      for (const dept in data) {
+        if (departments.includes(dept)) {
+          const departmentCourses = data[dept];
+
+          // Loop through courses in the department
+          for (const key in departmentCourses) {
+            const course = departmentCourses[key];
+
+            // Only push courses that are available
+            if (course.availability === true) {
+              fetchCourses.push({
+                id: key,
+                name: course.name || "", // Add name if available in the data
+                description: course.description || "",
+                department: dept,
+              });
+            }
+          }
         }
       }
 
-      setCourses(fetchCourses);
+      setCourses(fetchCourses); // Store all fetched courses
     };
 
     fetchCourses();
-  }, [db]);
+  }, []);
+
+  // Filter courses when department changes
+  useEffect(() => {
+    if (department) {
+      const filtered = courses.filter(
+        (course) => course.department === department
+      );
+      setFilteredCourses(filtered); // Set filtered courses
+    } else {
+      setFilteredCourses(courses); // Show all courses if no department is selected
+    }
+  }, [department, courses]);
 
   useEffect(() => {
     // Fetch booked slots
@@ -175,7 +211,7 @@ const UserTutoringBookTable: React.FC = () => {
       return;
     }
 
-    if (selectedCourses.length === 0) {
+    if (selectedCourse.length === 0) {
       toast.error("Please select at least one Course.");
       return;
     }
@@ -202,15 +238,6 @@ const UserTutoringBookTable: React.FC = () => {
 
     if (!date) {
       toast.error("Please select a date.");
-      return;
-    }
-
-    // Ensure no undefined values in selectedCourses
-    const validCourses = selectedCourses.filter(
-      (course) => course !== undefined && course !== null
-    );
-    if (validCourses.length === 0) {
-      toast.error("One or more courses are invalid.");
       return;
     }
 
@@ -367,7 +394,7 @@ const UserTutoringBookTable: React.FC = () => {
       purpose: purpose,
       department: department,
       tables: tableTitle,
-      course: validCourses,
+      course: Array.isArray(selectedCourse) ? selectedCourse : [selectedCourse], // Convert to array
       subject: subject,
       gender: gender,
     };
@@ -439,17 +466,21 @@ const UserTutoringBookTable: React.FC = () => {
     setShowStudentsSelection(false);
   };
 
-  const handleSelectCourses = (selected: string[]) => {
-    setSelectedCourses(selected);
-    setShowCourseSelection(false);
-  };
-
   const openStudentsModal = () => setShowStudentsSelection(true);
-  const openCourseModal = () => setShowCourseSelection(true);
 
   // Calculate the minimum date for booking (3 days from today)
   const minBookingDate = new Date();
   minBookingDate.setDate(minBookingDate.getDate() + 3);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-16 h-16">
+          <Lottie animationData={loadingAnimation} loop={true} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -478,7 +509,9 @@ const UserTutoringBookTable: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
             <li className="mb-4">
@@ -553,10 +586,10 @@ const UserTutoringBookTable: React.FC = () => {
                       type="text"
                       value={roomId}
                       readOnly
-                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                      className="shadow appearance-none border bg-gray-200 rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     />
                   </div>
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="department"
                       className="block text-black text-sm font-bold mb-2"
@@ -570,41 +603,34 @@ const UserTutoringBookTable: React.FC = () => {
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
                       <option value="">Select a department</option>
-                      <option value="CCS">CCS</option>
-                      <option value="CTEAS">CTEAS</option>
-                      <option value="CBE">CBE</option>
-                      <option value="COC">COC</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
+
                   <div>
                     <label
                       htmlFor="course"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      Course:
+                      Program:
                     </label>
-                    <button
-                      type="button"
-                      onClick={openCourseModal}
-                      className="p-2 bg-black text-white rounded"
+                    <select
+                      id="course"
+                      value={selectedCourse} // This should hold the ID of the selected course
+                      onChange={(e) => setSelectedCourse(e.target.value)} // Update the selected course ID
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
-                      Select Course
-                    </button>
-                    {selectedCourses.length > 0 && (
-                      <ul className="mt-3">
-                        {selectedCourses.map((coursesId, index) => {
-                          return (
-                            <li
-                              key={index}
-                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                            >
-                              {courses.find((u) => u.id === coursesId)
-                                ?.description || coursesId}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                      <option value="">Select a Program</option>
+                      {filteredCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label
@@ -624,21 +650,30 @@ const UserTutoringBookTable: React.FC = () => {
                 </div>
                 <div className="w-full md:w-1/2 pl-2">
                   {/* Right side */}
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="purpose"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
                       Purpose:
                     </label>
-                    <input
-                      type="text"
+                    <select
                       id="purpose"
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                    />
+                    >
+                      <option value="">Select Purpose</option>
+                      <option value="Meetings">Meetings</option>
+                      <option value="Discussions">Discussions</option>
+                      <option value="Workshops">Workshops</option>
+                      <option value="Presentations">Presentations</option>
+                      <option value="Training">Training</option>
+                      <option value="Reporting">Reporting</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
+
                   <div>
                     <label
                       htmlFor="gender"
@@ -665,12 +700,10 @@ const UserTutoringBookTable: React.FC = () => {
                     >
                       Borrowed By:
                     </label>
-                    {auth.currentUser ? (
+                    {user ? (
                       <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
-                        {auth.currentUser.displayName ||
-                          auth.currentUser.email ||
-                          auth.currentUser.uid}
-                        {/* Display user's name, email, or user ID as fallback */}
+                        {user.displayName || user.email || user.uid}
+                        {/* Display user's name, email, or UID */}
                       </div>
                     ) : (
                       <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
@@ -845,16 +878,6 @@ const UserTutoringBookTable: React.FC = () => {
             selectedUsers={selectedStudents}
             onSelect={handleSelectStudents}
             onCancel={() => setShowStudentsSelection(false)}
-          />
-        </div>
-      )}
-      {showCourseSelection && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <CourseSelection
-            courses={courses}
-            selectedCourses={selectedCourses}
-            onSelect={handleSelectCourses}
-            onCancel={() => setShowCourseSelection(false)}
           />
         </div>
       )}

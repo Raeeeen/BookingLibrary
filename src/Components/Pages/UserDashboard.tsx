@@ -379,7 +379,9 @@ function UserDashboard() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
             <li className="mb-4">
@@ -428,10 +430,13 @@ function UserDashboard() {
       <main className="flex-1 p-6 bg-white overflow-hidden">
         <header className="mb-6 flex flex-col md:flex-row justify-between items-center">
           <h1 className="text-2xl font-bold text-black">
-            SCC Learning Common Management System
+            SCC LEARNING COMMON MANAGEMENT SYSTEM
           </h1>
           <div className="flex items-center space-x-4 mt-4 md:mt-0">
-            <button onClick={handleLogout} className="btn text-white font-bold">
+            <button
+              onClick={handleLogout}
+              className="btn text-white font-bold bg-red-700"
+            >
               LOGOUT
             </button>
             <button className="btn btn-ghost btn-circle avatar">
@@ -447,26 +452,28 @@ function UserDashboard() {
           className="overflow-y-auto"
           style={{ maxHeight: "calc(100vh - 150px)" }}
         >
-          <h2 className="text-2xl font-bold mb-4 text-black">My Bookings</h2>
+          <div className="flex items-center gap-x-4 mb-4">
+            <h2 className="text-2xl font-bold text-black">My Bookings</h2>
 
-          {/* Tabs for switching between Room Bookings and Equipment Bookings */}
-          <div className="mb-4 text-black font-bold mt-6">
-            <button
-              className={`py-2 px-4 mr-2 ${
-                activeTab === "rooms" ? "bg-gray-200" : "bg-white"
-              } rounded border`}
-              onClick={() => setActiveTab("rooms")}
-            >
-              Room Bookings
-            </button>
-            <button
-              className={`py-2 px-4 ${
-                activeTab === "equipments" ? "bg-gray-200" : "bg-white"
-              } rounded border`}
-              onClick={() => setActiveTab("equipments")}
-            >
-              Equipment Borrowings
-            </button>
+            {/* Tabs for switching between Room Bookings and Equipment Bookings */}
+            <div className="text-black font-bold flex gap-x-2">
+              <button
+                className={`py-2 px-4 ${
+                  activeTab === "rooms" ? "bg-gray-200" : "bg-white"
+                } rounded border`}
+                onClick={() => setActiveTab("rooms")}
+              >
+                Room Bookings
+              </button>
+              <button
+                className={`py-2 px-4 ${
+                  activeTab === "equipments" ? "bg-gray-200" : "bg-white"
+                } rounded border`}
+                onClick={() => setActiveTab("equipments")}
+              >
+                Equipment Borrowings
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">

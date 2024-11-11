@@ -31,6 +31,7 @@ interface Transaction {
   equipmentDescription?: string;
   type: "room" | "equipment";
   borrowedBy: string; // Added borrowedBy field
+  startTimeFormatted?: string; // Add this line
 }
 
 interface User {
@@ -68,6 +69,7 @@ const Reports: React.FC = () => {
   const [currentTransactions, setCurrentTransactions] = useState<Transaction[]>(
     []
   );
+  const [searchQuery, setSearchQuery] = useState("");
 
   const firebaseConfig = {
     apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
@@ -91,30 +93,50 @@ const Reports: React.FC = () => {
         snapshot.forEach((childSnapshot) => {
           const userTransactions = childSnapshot.val();
 
-          // Scan both rooms and equipment transactions under each userId
+          // Process room transactions
           if (userTransactions.rooms) {
             Object.entries(userTransactions.rooms).forEach(
               ([id, transaction]) => {
                 const roomTransaction = transaction as Record<string, any>;
-                transactionsData.push({
-                  ...roomTransaction,
+
+                // Ensure all required fields are included
+                const transactionData: Transaction = {
                   id,
                   borrowedBy: childSnapshot.key, // Store user ID from transaction path
                   type: "room",
-                } as Transaction);
+                  startTime: roomTransaction.startTime || "N/A", // Provide a fallback value
+                  endTime: roomTransaction.endTime || "N/A", // Provide a fallback value
+                  date: roomTransaction.date || "N/A", // Provide a fallback value
+                  startTimeFormatted: roomTransaction.startTime
+                    ? formatTime(roomTransaction.startTime)
+                    : "No Time Provided", // Format time if present
+                };
+
+                transactionsData.push(transactionData);
               }
             );
           }
+
+          // Process equipment transactions
           if (userTransactions.equipments) {
             Object.entries(userTransactions.equipments).forEach(
               ([id, transaction]) => {
                 const equipmentTransaction = transaction as Record<string, any>;
-                transactionsData.push({
-                  ...equipmentTransaction,
+
+                // Ensure all required fields are included
+                const transactionData: Transaction = {
                   id,
                   borrowedBy: childSnapshot.key, // Store user ID from transaction path
                   type: "equipment",
-                } as Transaction);
+                  startTime: equipmentTransaction.startTime || "N/A", // Provide a fallback value
+                  endTime: equipmentTransaction.endTime || "N/A", // Provide a fallback value
+                  date: equipmentTransaction.date || "N/A", // Provide a fallback value
+                  startTimeFormatted: equipmentTransaction.startTime
+                    ? formatTime(equipmentTransaction.startTime)
+                    : "No Time Provided", // Format time if present
+                };
+
+                transactionsData.push(transactionData);
               }
             );
           }
@@ -269,6 +291,28 @@ const Reports: React.FC = () => {
     return `${adjustedHour}:${formattedMinute} ${period}`;
   };
 
+  // Filter bookings based on search query and activeTab
+  const filteredBookings = recentBookings.filter((booking) => {
+    const userName = users[booking.borrowedBy]?.name || "";
+    const roomName = booking.roomName || "";
+    const equipmentName = booking.equipmentName || "";
+
+    // Check if the search query matches any relevant field depending on activeTab
+    const matchesSearchQuery =
+      userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      roomName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      equipmentName.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Filter based on activeTab
+    if (activeTab === "rooms") {
+      return roomName && matchesSearchQuery;
+    } else if (activeTab === "equipments") {
+      return equipmentName && matchesSearchQuery;
+    }
+
+    return false;
+  });
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
@@ -308,7 +352,9 @@ const Reports: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -504,7 +550,9 @@ const Reports: React.FC = () => {
                             End Time
                           </th>
                           <th className="py-2 px-4 border-b text-left">
-                            Borrowed By
+                            {activeTab === "rooms"
+                              ? "Booked By"
+                              : "Borrowed By"}
                           </th>
                         </tr>
                       </thead>
@@ -555,103 +603,132 @@ const Reports: React.FC = () => {
                 <h2 className="card-title text-black font-bold text-xl mb-4">
                   {activeTab === "equipments" ? "Borrowings" : "Bookings"}
                 </h2>
-                <ul className="space-y-4">
-                  {recentBookings
-                    .filter((booking) =>
-                      activeTab === "rooms"
-                        ? booking.roomName
-                        : booking.equipmentName
-                    )
-                    .map((booking) => (
-                      <li
-                        key={booking.id}
-                        className="flex flex-col border-b pb-4"
-                      >
-                        <div className="flex items-center space-x-4 mb-2">
-                          {users[booking.borrowedBy] ? (
-                            <div className="flex items-center space-x-4">
-                              {users[booking.borrowedBy].photoURL ? (
-                                <img
-                                  src={users[booking.borrowedBy].photoURL}
-                                  alt={`${
-                                    users[booking.borrowedBy].name
-                                  }'s profile`}
-                                  className="h-12 w-12 rounded-full border-2 border-gray-300"
-                                />
-                              ) : (
-                                <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                                  {users[booking.borrowedBy].name.charAt(0)}
-                                </div>
-                              )}
-                              <div className="flex flex-col">
-                                <p className="text-xl text-black font-extrabold">
-                                  {users[booking.borrowedBy].name}
-                                </p>
-                                <p className="text-sm text-black">
-                                  {users[booking.borrowedBy].email}
-                                </p>
+
+                {/* Search Bar */}
+                <input
+                  type="text"
+                  placeholder={`Search ${
+                    activeTab === "equipments" ? "Borrowings" : "Bookings"
+                  }...`}
+                  className="w-full pl-3 pr-3 py-2 rounded bg-white text-black font-bold placeholder-gray-500 border border-black focus:border-black focus:outline-none mb-5"
+                  style={{ boxSizing: "border-box" }}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+
+                {/* Scrollable list of bookings */}
+                <ul
+                  className="space-y-4 overflow-y-auto"
+                  style={{ maxHeight: "calc(100vh - 250px)" }}
+                >
+                  {filteredBookings.map((booking) => (
+                    <li
+                      key={booking.id}
+                      className="flex flex-col border-b pb-4"
+                    >
+                      <div className="flex items-center space-x-4 mb-2">
+                        {users[booking.borrowedBy] ? (
+                          <div className="flex items-center space-x-4">
+                            {users[booking.borrowedBy].photoURL ? (
+                              <img
+                                src={users[booking.borrowedBy].photoURL}
+                                alt={`${
+                                  users[booking.borrowedBy].name
+                                }'s profile`}
+                                className="h-12 w-12 rounded-full border-2 border-gray-300"
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                                {users[booking.borrowedBy].name.charAt(0)}
                               </div>
+                            )}
+                            <div className="flex flex-col">
+                              <p className="text-xl text-black font-extrabold">
+                                {users[booking.borrowedBy].name}
+                              </p>
+                              <p className="text-sm text-black">
+                                {users[booking.borrowedBy].email}
+                              </p>
                             </div>
-                          ) : (
-                            <p>No user information available</p>
-                          )}
-                        </div>
-                        <div className="flex flex-col ml-4">
-                          <p className="text-xl text-black font-extrabold">
-                            {booking.roomName ||
-                              `${booking.equipmentName || "No equipment name"}${
-                                booking.equipmentDescription
-                                  ? ` (${booking.equipmentDescription})`
-                                  : ""
-                              }`}
-                          </p>
-                          <p className="text-xs text-gray-600">
-                            {`${booking.date} ${formatTime(
-                              booking.startTime
-                            )} - ${formatTime(booking.endTime)}`}
-                          </p>
-                          <p className="text-xs text-black">
-                            {activeTab === "rooms"
-                              ? booking.roomName === "IMC/AVR" &&
-                                booking.equipments?.length
-                                ? `Equipments: ${booking.equipments
+                          </div>
+                        ) : (
+                          <p>No user information available</p>
+                        )}
+                      </div>
+                      <div className="flex flex-col ml-4">
+                        <p className="text-xl text-black font-extrabold">
+                          {booking.roomName ||
+                            `${booking.equipmentName || "No equipment name"}${
+                              booking.equipmentDescription
+                                ? ` (${booking.equipmentDescription})`
+                                : ""
+                            }`}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {`${booking.date} ${formatTime(
+                            booking.startTime
+                          )} - ${formatTime(booking.endTime)}`}
+                        </p>
+                        <p className="text-xs text-black">
+                          {activeTab === "rooms" ? (
+                            booking.roomName === "IMC/AVR" &&
+                            booking.equipments?.length ? (
+                              <>
+                                Equipments:{" "}
+                                <span className="font-bold">
+                                  {booking.equipments
                                     .map(
                                       (item) =>
                                         equipmentDescriptions[item] || item
                                     )
-                                    .join(", ")}`
-                                : `Students: ${
-                                    booking.studentsSelected
-                                      ?.map(
-                                        (studentId) =>
-                                          users[studentId]?.name || studentId
-                                      )
-                                      .join(", ") || "N/A"
-                                  }`
-                              : `Equipments: ${booking.equipments1
+                                    .join(", ")}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                Students:{" "}
+                                <span className="font-bold">
+                                  {booking.studentsSelected
+                                    ?.map(
+                                      (studentId) =>
+                                        users[studentId]?.name || studentId
+                                    )
+                                    .join(", ") || "N/A"}
+                                </span>
+                              </>
+                            )
+                          ) : (
+                            <>
+                              Equipments:{" "}
+                              <span className="font-bold">
+                                {booking.equipments1
                                   ?.map(
                                     (item) =>
                                       equipmentDescriptions[item] || item
                                   )
-                                  .join(", ")}`}
-                          </p>
-                          {activeTab === "rooms" &&
-                            booking.roomName === "Tutoring Room" && (
-                              <div className="">
-                                <p className="text-black text-xs">
-                                  Tables:{" "}
-                                  {tablesData[booking.id]
-                                    ? tablesData[booking.id]
-                                        .split(",")
-                                        .map((table) => table.trim())
-                                        .join(", ")
-                                    : "No tables available"}
-                                </p>
-                              </div>
-                            )}
-                        </div>
-                      </li>
-                    ))}
+                                  .join(", ")}
+                              </span>
+                            </>
+                          )}
+                        </p>
+
+                        {activeTab === "rooms" &&
+                          booking.roomName === "Tutoring Room" && (
+                            <div>
+                              <p className="text-black text-xs">
+                                Tables:{" "}
+                                {tablesData[booking.id]
+                                  ? tablesData[booking.id]
+                                      .split(",")
+                                      .map((table) => table.trim())
+                                      .join(", ")
+                                  : "No tables available"}
+                              </p>
+                            </div>
+                          )}
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>

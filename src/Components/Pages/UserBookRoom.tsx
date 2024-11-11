@@ -18,9 +18,10 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import CourseSelection from "./CourseSelection";
-import { getAuth } from "firebase/auth";
+import { getAuth, User } from "firebase/auth";
 import AddStudentsUserSelection from "./AddStudentsUserSelection";
+import Lottie from "lottie-react";
+import loadingAnimation from "../../assets/loadinganimation2.json";
 
 const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
@@ -34,9 +35,7 @@ const UserBookRoom: React.FC = () => {
   const [, setStudents] = useState<string[]>([]);
   const [, setStudentName] = useState<string>("");
   const [roomId] = useState(generateRandomRoomId());
-  const [bookedSlots, setBookedSlots] = useState<{ start: Date; end: Date }[]>(
-    []
-  );
+  const [, setBookedSlots] = useState<{ start: Date; end: Date }[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
   const [department, setDepartment] = useState<string>("");
@@ -58,11 +57,14 @@ const UserBookRoom: React.FC = () => {
   const handleDateChange = (date: any) => setDate(date);
   const [, setCurrentUserId] = useState<string | null>(null);
   const [courses, setCourses] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [showCourseSelection, setShowCourseSelection] = useState(false);
+    { id: string; name: string; description: string; department: string }[]
+  >([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [selectedCourse, setSelectedCourse] = useState<string>(""); // For current selection
+  const departments = ["CCS", "COC", "CTEAS", "CBE"];
+  const [filteredCourses, setFilteredCourses] = useState<any[]>([]); // Store filtered courses based on department
 
   // Firebase configuration
   const firebaseConfig = {
@@ -81,12 +83,18 @@ const UserBookRoom: React.FC = () => {
   const auth = getAuth(app);
 
   useEffect(() => {
-    // Fetch the current logged-in user ID
-    const user = auth.currentUser;
-    if (user) {
-      setCurrentUserId(user.uid);
-      setSelectedUsers([user.uid]); // Automatically set current user as selected
-    }
+    const unsubscribe = auth.onAuthStateChanged((authUser) => {
+      if (authUser) {
+        setUser(authUser); // Save the authenticated user to the state
+        setSelectedUsers([authUser.uid]); // Set the current user as the selected user
+        setCurrentUserId(authUser.uid);
+      } else {
+        setUser(null); // Clear user state if no one is logged in
+      }
+      setLoading(false); // Stop loading once the user state is set
+    });
+
+    return () => unsubscribe(); // Clean up the listener
   }, []);
 
   useEffect(() => {
@@ -114,27 +122,53 @@ const UserBookRoom: React.FC = () => {
       const coursesRef = dbRef(db, "courses");
       const snapshot = await get(coursesRef);
       const data = snapshot.val();
+
       const fetchCourses: {
         id: string;
         name: string;
         description: string;
+        department: string;
       }[] = [];
 
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchCourses.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
+      // Loop through departments and courses
+      for (const dept in data) {
+        if (departments.includes(dept)) {
+          const departmentCourses = data[dept];
+
+          // Loop through courses in the department
+          for (const key in departmentCourses) {
+            const course = departmentCourses[key];
+
+            // Only push courses that are available
+            if (course.availability === true) {
+              fetchCourses.push({
+                id: key,
+                name: course.name || "", // Add name if available in the data
+                description: course.description || "",
+                department: dept,
+              });
+            }
+          }
         }
       }
 
-      setCourses(fetchCourses);
+      setCourses(fetchCourses); // Store all fetched courses
     };
 
     fetchCourses();
-  }, [db]);
+  }, []);
+
+  // Filter courses when department changes
+  useEffect(() => {
+    if (department) {
+      const filtered = courses.filter(
+        (course) => course.department === department
+      );
+      setFilteredCourses(filtered); // Set filtered courses
+    } else {
+      setFilteredCourses(courses); // Show all courses if no department is selected
+    }
+  }, [department, courses]);
 
   useEffect(() => {
     // Fetch booked slots
@@ -171,7 +205,7 @@ const UserBookRoom: React.FC = () => {
       return;
     }
 
-    if (selectedCourses.length === 0) {
+    if (selectedCourse.length === 0) {
       toast.error("Please select at least one Course.");
       return;
     }
@@ -193,20 +227,6 @@ const UserBookRoom: React.FC = () => {
 
     if (!gender) {
       toast.error("Please select gender.");
-      return;
-    }
-
-    if (!date) {
-      toast.error("Please select a date.");
-      return;
-    }
-
-    // Ensure no undefined values in selectedCourses
-    const validCourses = selectedCourses.filter(
-      (course) => course !== undefined && course !== null
-    );
-    if (validCourses.length === 0) {
-      toast.error("One or more courses are invalid.");
       return;
     }
 
@@ -269,79 +289,95 @@ const UserBookRoom: React.FC = () => {
         8 * 3600000
     );
 
-    // Check if the start time is before the end time
     if (startTimeDateUTC8 >= endTimeDateUTC8) {
       toast.error("End time must be after start time.");
       return;
     }
 
-    // Check if the booking is exactly one hour
     const duration =
-      (endTimeDateUTC8.getTime() - startTimeDateUTC8.getTime()) / 60000; // duration in minutes
+      (endTimeDateUTC8.getTime() - startTimeDateUTC8.getTime()) / 60000;
     if (duration !== 60) {
-      toast.error("You can only book for 1h.");
+      toast.error("You can only book for 1 hour.");
       return;
     }
 
-    // Check if the new booking overlaps with any existing bookings
-    const isOverlapping = bookedSlots.some((slot) => {
-      const slotStart = new Date(
-        new Date(slot.start).getTime() -
-          new Date(slot.start).getTimezoneOffset() * 60000 +
-          8 * 3600000
-      ); // Ensure slot.start is adjusted to UTC+8
-      const slotEnd = new Date(
-        new Date(slot.end).getTime() -
-          new Date(slot.end).getTimezoneOffset() * 60000 +
-          8 * 3600000
-      ); // Ensure slot.end is adjusted to UTC+8
+    const checkTimeSlotConflict = async () => {
+      const checkBookingsRef = (path: string) => dbRef(db, path);
 
-      // Overlapping condition: Start time before existing end time AND end time after existing start time
-      return (
-        slotStart.toDateString() === startTimeDateUTC8.toDateString() &&
-        startTimeDateUTC8 < slotEnd &&
-        endTimeDateUTC8 > slotStart
-      );
-    });
+      const [bookroomsSnapshot, pendingRoomBookingsSnapshot] =
+        await Promise.all([
+          get(checkBookingsRef("bookrooms")),
+          get(checkBookingsRef("pendingRoomBookings")),
+        ]);
 
-    if (isOverlapping) {
-      toast.error("The selected time slot overlaps with an existing booking.");
-      return;
-    }
+      const existingBookings = bookroomsSnapshot.val();
+      const pendingBookings = pendingRoomBookingsSnapshot.val();
 
-    // Check if the time slot already exists in the database
-    const existingBookingsRef = dbRef(db, "bookrooms");
-    const existingBookingsSnapshot = await get(existingBookingsRef);
-    const existingBookings = existingBookingsSnapshot.val();
+      // Combine existing and pending bookings for the same roomTitle/roomName
+      const allBookings = {
+        ...existingBookings,
+        ...pendingBookings,
+      };
 
-    if (existingBookings) {
-      const isTimeSlotTaken = Object.values(existingBookings).some(
-        (booking: any) => {
-          const bookingDateUTC8 = new Date(
-            new Date(booking.date).getTime() -
+      console.log("Checking for time conflicts for room:", roomTitle);
+
+      if (allBookings) {
+        // Filter bookings to include only those for the selected roomTitle/roomName
+        const filteredRoomBookings = Object.values(allBookings).filter(
+          (booking: any) => booking.roomName === roomTitle
+        );
+
+        console.log("Filtered bookings for room:", filteredRoomBookings);
+
+        // Convert new booking start and end times to 12-hour format
+        const newStartTime12h = convertTo12HourFormat(
+          `${startHours24}:${startMinutes24}`
+        );
+        const newEndTime12h = convertTo12HourFormat(
+          `${endHours24}:${endMinutes24}`
+        );
+
+        console.log("New booking start time (12h):", newStartTime12h);
+        console.log("New booking end time (12h):", newEndTime12h);
+
+        // Check for overlapping time slots
+        return filteredRoomBookings.some((booking: any) => {
+          // Log raw start and end times for debugging
+          console.log("Existing booking start time raw:", booking.startTime);
+          console.log("Existing booking end time raw:", booking.endTime);
+
+          // Adjust booking start and end times to UTC+8
+          const slotStart = new Date(
+            new Date(booking.date + "T" + booking.startTime).getTime() -
               new Date(booking.date).getTimezoneOffset() * 60000 +
               8 * 3600000
-          )
-            .toISOString()
-            .split("T")[0];
-          return (
-            bookingDateUTC8 === startTimeDateUTC8.toISOString().split("T")[0] &&
-            booking.startTime ===
-              `${startHours24.toString().padStart(2, "0")}:${startMinutes24
-                .toString()
-                .padStart(2, "0")}` &&
-            booking.endTime ===
-              `${endHours24.toString().padStart(2, "0")}:${endMinutes24
-                .toString()
-                .padStart(2, "0")}`
           );
-        }
-      );
+          const slotEnd = new Date(
+            new Date(booking.date + "T" + booking.endTime).getTime() -
+              new Date(booking.date).getTimezoneOffset() * 60000 +
+              8 * 3600000
+          );
 
-      if (isTimeSlotTaken) {
-        toast.error("This time slot is already booked.");
-        return;
+          // Overlapping condition
+          const isOverlapping =
+            startTimeDateUTC8 < slotEnd && endTimeDateUTC8 > slotStart;
+
+          console.log("Is overlapping:", isOverlapping);
+
+          return isOverlapping;
+        });
       }
+      return false;
+    };
+
+    // Check for conflicts
+    const isTimeSlotTaken = await checkTimeSlotConflict();
+
+    if (isTimeSlotTaken) {
+      toast.error("This time slot is already booked for the selected room.");
+      return;
+    } else {
+      console.log("No conflicts found, proceeding with booking.");
     }
 
     // Format the date as YYYY-MM-DD
@@ -362,20 +398,19 @@ const UserBookRoom: React.FC = () => {
       borrowedBy: selectedUsers,
       purpose: purpose,
       department: department,
-      course: validCourses,
+      course: Array.isArray(selectedCourse) ? selectedCourse : [selectedCourse],
       subject: subject,
       gender: gender,
     };
 
-    // Reference to the pendingbookings node
-    const bookingRef = dbRef(db, `pendingRoomBookings/${roomId}`); // Change this to 'pendingbookings'
+    // Reference to the pendingRoomBookings node
+    const bookingRef = dbRef(db, `pendingRoomBookings/${roomId}`);
 
     try {
       // Save booking data to Firebase
       await set(bookingRef, bookingData);
 
-      toast.success("Waiting for the Admin confirmation!");
-      setSelectedUsers([]); // Clear selected users after booking
+      toast.success("Waiting for Admin confirmation!");
       setTimeout(() => {
         navigate("/UserDashboard");
       }, 2000);
@@ -398,6 +433,13 @@ const UserBookRoom: React.FC = () => {
         "An error occurred while booking the room. Please try again."
       );
     }
+  };
+
+  const convertTo12HourFormat = (time: string): string => {
+    const [hours, minutes] = time.split(":").map(Number);
+    const amPm = hours >= 12 ? "PM" : "AM";
+    const formattedHours = hours % 12 || 12; // Convert 0 to 12 for midnight
+    return `${formattedHours}:${minutes.toString().padStart(2, "0")} ${amPm}`;
   };
 
   const convertTo24HourFormat = (
@@ -429,17 +471,21 @@ const UserBookRoom: React.FC = () => {
     setShowStudentsSelection(false);
   };
 
-  const handleSelectCourses = (selected: string[]) => {
-    setSelectedCourses(selected);
-    setShowCourseSelection(false);
-  };
-
   const openStudentsModal = () => setShowStudentsSelection(true);
-  const openCourseModal = () => setShowCourseSelection(true);
 
   // Calculate the minimum date for booking (3 days from today)
   const minBookingDate = new Date();
   minBookingDate.setDate(minBookingDate.getDate() + 3);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-16 h-16">
+          <Lottie animationData={loadingAnimation} loop={true} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -468,7 +514,9 @@ const UserBookRoom: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
             <li className="mb-4">
@@ -540,10 +588,10 @@ const UserBookRoom: React.FC = () => {
                       type="text"
                       value={roomId}
                       readOnly
-                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                      className="shadow appearance-none border bg-gray-200 rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     />
                   </div>
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="department"
                       className="block text-black text-sm font-bold mb-2"
@@ -557,41 +605,34 @@ const UserBookRoom: React.FC = () => {
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
                       <option value="">Select a department</option>
-                      <option value="CCS">CCS</option>
-                      <option value="CTEAS">CTEAS</option>
-                      <option value="CBE">CBE</option>
-                      <option value="COC">COC</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
+
                   <div>
                     <label
                       htmlFor="course"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      Course:
+                      Program:
                     </label>
-                    <button
-                      type="button"
-                      onClick={openCourseModal}
-                      className="p-2 bg-black text-white rounded"
+                    <select
+                      id="course"
+                      value={selectedCourse} // This should hold the ID of the selected course
+                      onChange={(e) => setSelectedCourse(e.target.value)} // Update the selected course ID
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
-                      Select Course
-                    </button>
-                    {selectedCourses.length > 0 && (
-                      <ul className="mt-3">
-                        {selectedCourses.map((coursesId, index) => {
-                          return (
-                            <li
-                              key={index}
-                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                            >
-                              {courses.find((u) => u.id === coursesId)
-                                ?.description || coursesId}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                      <option value="">Select a Program</option>
+                      {filteredCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label
@@ -611,20 +652,28 @@ const UserBookRoom: React.FC = () => {
                 </div>
                 <div className="w-full md:w-1/2 pl-2">
                   {/* Right side */}
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="purpose"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
                       Purpose:
                     </label>
-                    <input
-                      type="text"
+                    <select
                       id="purpose"
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                    />
+                    >
+                      <option value="">Select Purpose</option>
+                      <option value="Meetings">Meetings</option>
+                      <option value="Discussions">Discussions</option>
+                      <option value="Workshops">Workshops</option>
+                      <option value="Presentations">Presentations</option>
+                      <option value="Training">Training</option>
+                      <option value="Reporting">Reporting</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
 
                   <div>
@@ -653,12 +702,10 @@ const UserBookRoom: React.FC = () => {
                     >
                       Borrowed By:
                     </label>
-                    {auth.currentUser ? (
+                    {user ? (
                       <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
-                        {auth.currentUser.displayName ||
-                          auth.currentUser.email ||
-                          auth.currentUser.uid}
-                        {/* Display user's name, email, or user ID as fallback */}
+                        {user.displayName || user.email || user.uid}
+                        {/* Display user's name, email, or UID */}
                       </div>
                     ) : (
                       <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
@@ -824,16 +871,6 @@ const UserBookRoom: React.FC = () => {
             selectedUsers={selectedStudents}
             onSelect={handleSelectStudents}
             onCancel={() => setShowStudentsSelection(false)}
-          />
-        </div>
-      )}
-      {showCourseSelection && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <CourseSelection
-            courses={courses}
-            selectedCourses={selectedCourses}
-            onSelect={handleSelectCourses}
-            onCancel={() => setShowCourseSelection(false)}
           />
         </div>
       )}

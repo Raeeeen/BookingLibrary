@@ -63,7 +63,9 @@ function BookBorrow() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -208,7 +210,7 @@ function BookBorrow() {
       <main className="flex-1 p-6 bg-white flex items-center justify-center">
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-6">
           <div className="card bg-white shadow-lg p-6 rounded-lg transition-transform transform hover:scale-105 flex flex-col items-center mr-6">
-            <h2 className="text-lg text-black mb-2 font-semibold">Book</h2>
+            <h2 className="text-lg text-black mb-2 font-semibold">Booking</h2>
             <p className="mb-4 text-black text-3xl font-bold">Rooms</p>
             <button
               onClick={handleRoomsClick}
@@ -218,7 +220,7 @@ function BookBorrow() {
             </button>
           </div>
           <div className="card bg-white shadow-lg p-6 rounded-lg transition-transform transform hover:scale-105 flex flex-col items-center ml-6">
-            <h2 className="text-lg text-black mb-2 font-semibold">Borrow</h2>
+            <h2 className="text-lg text-black mb-2 font-semibold">Borrowing</h2>
             <p className="mb-4 text-black text-3xl font-bold">Equipments</p>
             <button
               className="btn text-white font-bold mt-2 w-3/4 bg-green-700 hover:bg-black rounded-lg transition duration-200"

@@ -22,6 +22,7 @@ import {
   get,
   DataSnapshot,
   set,
+  Database,
 } from "firebase/database";
 import Lottie from "lottie-react";
 import loadingAnimation from "../../assets/loadinganimation2.json";
@@ -30,15 +31,7 @@ import notificationBellWithNotif from "../../assets/notificationWithNotif.png";
 import QRCode from "qrcode";
 import { getStorage, ref as storageRef, uploadString } from "firebase/storage";
 import Modal from "./DashboardModal";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Tooltip, Legend, Cell } from "recharts";
 
 interface User {
   name: string;
@@ -88,6 +81,7 @@ interface EquipmentBooking {
   endTime: string;
   borrowedBy: string;
   borrowedByName?: string;
+  equipmentDescriptions?: string;
 }
 
 interface EquipmentBooking2 {
@@ -138,8 +132,46 @@ function Dashboard() {
   const [activeTab1, setActiveTab1] = useState<
     "pendingRooms" | "pendingEquipments"
   >("pendingRooms");
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [courseColors, setCourseColors] = useState(new Map());
+  const COLORS = [
+    "#0C0C0C",
+    "#481E14",
+    "#9B3922",
+    "#F2613F",
+    "#222831",
+    "#31363F",
+    "#76ABAE",
+    "#3E3232",
+    "#503C3C",
+    "#7E6363",
+    "#A87C7C",
+    "#191919",
+    "#FF5733",
+    "#750E21",
+    "#E3651D",
+    "#BED754",
+    "#331D2C",
+    "#3F2E3E",
+    "#A78295",
+    "#EFE1D1",
+    "#5F264A",
+    "#643A6B",
+    "#957777",
+    "#B0A4A4",
+    "#0B2447",
+    "#19376D",
+    "#576CBC",
+    "#635985",
+    "#443C68",
+    "#393053",
+  ];
+  let colorIndex = 0; // To keep track of the current color
+  // State and useEffect for fetching and preparing chart data
+  const [roomChartData, setRoomChartData] = useState<any[]>([]);
+  const [equipmentChartData, setEquipmentChartData] = useState<any[]>([]);
+  const [roomColors, setRoomColors] = useState<Map<string, string>>(new Map());
+  const [equipmentColors, setEquipmentColors] = useState<Map<string, string>>(
+    new Map()
+  );
 
   const firebaseConfig = {
     apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
@@ -289,6 +321,7 @@ function Dashboard() {
                 equipmentBooking.equipments
                   ?.map((id) => equipmentDescriptions[id] || "Unknown")
                   .join(", ") || "None", // Map equipment IDs to descriptions
+
               nameDisplay: equipmentBooking.equipmentName || "None",
             })
           );
@@ -411,9 +444,15 @@ function Dashboard() {
         if (type === "room") {
           qrCodeData = generateRoomQRCodeData(data, id);
           title = data.roomName;
+
+          // Increment roomUsed count after confirming the room booking
+          await incrementRoomUsed(data.roomName);
         } else {
           qrCodeData = generateEquipmentQRCodeData(data, id);
           title = data.equipmentName;
+
+          // Increment equipmentUsed count after confirming the equipment booking
+          await incrementEquipmentUsed(data.equipmentName);
         }
 
         const qrCodeUrl = await QRCode.toDataURL(qrCodeData);
@@ -430,6 +469,138 @@ function Dashboard() {
       }
     } catch (error) {
       console.error("Error confirming booking:", error);
+    }
+  };
+
+  // Function to get the Room key by matching description
+  const getRoomKeyByDescription = async (
+    db: Database,
+    description: string
+  ): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const roomsRef = ref(db, "rooms");
+
+      onValue(roomsRef, (snapshot) => {
+        const data = snapshot.val();
+        let foundKey: string | null = null;
+
+        for (const key in data) {
+          const room = data[key];
+          if (room.description === description) {
+            foundKey = key;
+            break;
+          }
+        }
+
+        resolve(foundKey); // Resolve with foundKey or null
+      });
+    });
+  };
+
+  // Function to increment roomUsed count
+  const incrementRoomUsed = async (description: string) => {
+    const db = getDatabase();
+
+    // Get the room ID using the description
+    const roomId = await getRoomKeyByDescription(db, description);
+
+    if (roomId) {
+      const roomRef = ref(db, `rooms/${roomId}`);
+
+      try {
+        const roomSnapshot = await get(roomRef);
+        const roomData = roomSnapshot.val();
+
+        if (roomData) {
+          // Check if roomUsed already exists
+          const currentCount = roomData.roomUsed || 0; // Default to 0 if undefined
+          const newCount = currentCount + 1; // Increment the count
+
+          // Update the room entry in the database
+          await set(roomRef, {
+            ...roomData,
+            roomUsed: newCount,
+          });
+          console.log(
+            `Room used count for ID "${roomId}" updated to ${newCount}.`
+          );
+        } else {
+          console.error(`Room with ID "${roomId}" not found in the database.`);
+        }
+      } catch (error) {
+        console.error("Error incrementing roomUsed count:", error);
+      }
+    } else {
+      console.error(`Room with description "${description}" not found.`);
+    }
+  };
+
+  // Function to get the equipment key by matching description
+  const getEquipmentKeyByDescription = async (
+    db: Database,
+    description: string
+  ): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const equipmentsRef = ref(db, "equipments");
+
+      onValue(equipmentsRef, (snapshot) => {
+        const data = snapshot.val();
+        let foundKey: string | null = null;
+
+        for (const key in data) {
+          const equipment = data[key];
+          if (equipment.description === description) {
+            foundKey = key;
+            break;
+          }
+        }
+
+        if (foundKey) {
+          resolve(foundKey);
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  };
+
+  // Function to increment equipmentUsed count
+  const incrementEquipmentUsed = async (description: string) => {
+    const db = getDatabase();
+
+    // Get the equipment key using the description
+    const equipmentId = await getEquipmentKeyByDescription(db, description);
+
+    if (equipmentId) {
+      const equipmentRef = ref(db, `equipments/${equipmentId}`);
+
+      try {
+        const equipmentSnapshot = await get(equipmentRef);
+        const equipmentData = equipmentSnapshot.val();
+
+        if (equipmentData) {
+          // Check if equipmentUsed already exists
+          const currentCount = equipmentData.equipmentUsed || 0; // Default to 0 if undefined
+          const newCount = currentCount + 1; // Increment the count
+
+          // Update the equipment entry in the database
+          await set(equipmentRef, {
+            ...equipmentData,
+            equipmentUsed: newCount,
+          });
+          console.log(
+            `Equipment used count for ID "${equipmentId}" updated to ${newCount}.`
+          );
+        } else {
+          console.error(
+            `Equipment with ID "${equipmentId}" not found in the database.`
+          );
+        }
+      } catch (error) {
+        console.error("Error incrementing equipmentUsed count:", error);
+      }
+    } else {
+      console.error(`Equipment with description "${description}" not found.`);
     }
   };
 
@@ -616,90 +787,53 @@ function Dashboard() {
   const handleRetrieve = async (
     bookingId: string,
     isEquipment: boolean,
-    equipmentName?: string
+    _equipmentName?: string
   ) => {
-    const currentDate = new Date().toISOString().split("T")[0]; // Format current date as YYYY-MM-DD
+    const currentDate = new Date().toISOString().split("T")[0];
 
-    // Determine the correct reference based on whether it's a room or equipment booking
     const bookingRef = isEquipment
-      ? ref(db, `bookequipments/${bookingId}`) // For equipment bookings
-      : ref(db, `bookrooms/${bookingId}`); // For room bookings
+      ? ref(db, `bookequipments/${bookingId}`)
+      : ref(db, `bookrooms/${bookingId}`);
 
     const reportRef = isEquipment
-      ? ref(db, `reportsTable/equipments/${currentDate}/${bookingId}`) // For equipment reports
-      : ref(db, `reportsTable/rooms/${currentDate}/${bookingId}`); // For room reports
+      ? ref(db, `reportsTable/equipments/${currentDate}/${bookingId}`)
+      : ref(db, `reportsTable/rooms/${currentDate}/${bookingId}`);
 
     try {
       const bookingSnapshot = await get(bookingRef);
       if (bookingSnapshot.exists()) {
         const bookingData = bookingSnapshot.val();
 
-        // Copy booking data to the new node
         await set(reportRef, bookingData);
-        console.log(
-          `Booking data copied to reportsTable for booking ID: ${bookingId}`
-        );
 
-        // Add to TransactionHistory under the borrowedBy user's ID
         const borrowedBy = bookingData.borrowedBy || "unknown_user";
         const transactionHistoryRef = isEquipment
           ? ref(db, `TransactionHistory/${borrowedBy}/equipments/${bookingId}`)
           : ref(db, `TransactionHistory/${borrowedBy}/rooms/${bookingId}`);
 
-        // Copy booking data to the new node (TransactionHistory)
         await set(transactionHistoryRef, {
           ...bookingData,
-          retrievedOn: currentDate, // Optionally log the date of retrieval
+          retrievedOn: currentDate,
         });
-        console.log(
-          `Booking data copied to TransactionHistory for user ID: ${borrowedBy}`
-        );
 
-        // If it's an equipment booking, find the equipment by name
-        if (isEquipment) {
-          // Scan all equipments to find the ID by description
-          const equipmentsRef = ref(db, `equipments`);
-          const equipmentsSnapshot = await get(equipmentsRef);
+        // Handle individual equipment bookings with associated equipment IDs
+        if (isEquipment && bookingData.equipments) {
+          for (const equipmentId of bookingData.equipments) {
+            const equipmentDetailsRef = ref(db, `equipments/${equipmentId}`);
+            const equipmentSnapshot = await get(equipmentDetailsRef);
 
-          if (equipmentsSnapshot.exists()) {
-            const equipments = equipmentsSnapshot.val();
-            let equipmentId = null;
-
-            // Loop through all equipments to find the one matching the equipmentName
-            for (const id in equipments) {
-              if (equipments[id].description === equipmentName) {
-                equipmentId = id; // Store the ID if description matches
-                break; // Exit the loop once found
-              }
-            }
-
-            // If equipment ID is found, set its availability to true
-            if (equipmentId) {
+            if (equipmentSnapshot.exists()) {
               const availabilityRef = ref(
                 db,
                 `equipments/${equipmentId}/availability`
               );
-              await set(availabilityRef, true); // Update availability to true
-              console.log(
-                `Availability set to true for equipment ID: ${equipmentId}`
-              );
-            } else {
-              console.log("Equipment not found by description:", equipmentName);
+              await set(availabilityRef, true);
             }
-          } else {
-            console.log("No equipment data found.");
           }
         }
 
-        // Delete the booking from the original node
         await remove(bookingRef);
-        console.log(
-          `Booking deleted from ${
-            isEquipment ? "bookequipments" : "bookrooms"
-          } for booking ID: ${bookingId}`
-        );
 
-        // Refresh bookings after the operation
         fetchBookings();
       } else {
         console.log("Booking not found.");
@@ -755,159 +889,110 @@ function Dashboard() {
     setSelectedBooking2(null);
   };
 
-  // Helper to generate random colors for each course
-  const getRandomColor = () => {
-    return "#" + Math.floor(Math.random() * 16777215).toString(16);
-  };
-
-  // Fetch transaction history from Firebase
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Get reference to the entire TransactionHistory node
         const transactionHistoryRef = ref(db, `TransactionHistory`);
-
         const snapshot = await get(transactionHistoryRef);
         if (snapshot.exists()) {
           const allTransactionData = snapshot.val();
 
-          // Fetch courses data
-          const coursesSnapshot = await get(ref(db, "courses"));
-          const coursesData = coursesSnapshot.val();
-
-          // Prepare chart data for all users with course names
-          const preparedData = await prepareChartData(
+          // Prepare chart data for rooms and equipments
+          const roomChartData = await prepareChartData(
             allTransactionData,
-            coursesData
+            "rooms"
           );
-          // Only generate colors if we have new data
-          const colors = generateCourseColors(preparedData);
-          setCourseColors(colors);
-          setChartData(preparedData);
+          const equipmentChartData = await prepareChartData(
+            allTransactionData,
+            "equipments"
+          );
+
+          // Generate colors based on the new data
+          const roomColorsMap = generateCourseColors(roomChartData);
+          const equipmentColorsMap = generateCourseColors(equipmentChartData);
+
+          // Set the state with new data
+          setRoomChartData(roomChartData);
+          setEquipmentChartData(equipmentChartData);
+          setRoomColors(roomColorsMap);
+          setEquipmentColors(equipmentColorsMap);
         }
       } catch (error) {
-        console.error("Error fetching transaction history or courses:", error);
+        console.error("Error fetching transaction history:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [activeTab1]);
+  }, []);
 
   const prepareChartData = async (
     allTransactionData: any,
-    coursesData: any
+    type: "rooms" | "equipments"
   ) => {
-    const roomCounts: { [key: string]: { [course: string]: number } } = {}; // Store counts per room by course
-    const equipmentCounts: { [key: string]: { [course: string]: number } } = {}; // Store counts per equipment by course
+    const counts: { [key: string]: { [department: string]: number } } = {};
 
-    // Helper function to get the course name from the course ID
-    const getCourseName = (courseId: string) => {
-      if (!coursesData || !coursesData[courseId]) {
-        console.warn(`Course ID ${courseId} not found in coursesData`);
-        return "Unknown Course";
-      }
-      return coursesData[courseId].description || "Unknown Course";
-    };
-
-    // Iterate over all users in the TransactionHistory
+    // Count each booking by department for each room/equipment
     for (const userId in allTransactionData) {
       const userTransactions = allTransactionData[userId];
+      const transactions = userTransactions[type];
 
-      // Handle rooms
-      if (
-        userTransactions.rooms &&
-        typeof userTransactions.rooms === "object"
-      ) {
-        Object.values(userTransactions.rooms).forEach((roomBooking: any) => {
-          const roomName = roomBooking.roomName || "Unknown Room";
-          const courseIdArray = Array.isArray(roomBooking.course)
-            ? roomBooking.course
-            : [];
+      if (transactions && typeof transactions === "object") {
+        Object.values(transactions).forEach((booking: any) => {
+          const itemName =
+            booking[type === "rooms" ? "roomName" : "equipmentName"] ||
+            `Unknown ${type === "rooms" ? "Room" : "Equipment"}`;
+          const department = booking.department || "Unknown Department";
 
-          // Resolve course names from IDs
-          const courseNames = courseIdArray.map((courseId: string) =>
-            getCourseName(courseId)
-          );
-
-          if (roomName) {
-            if (!roomCounts[roomName]) {
-              roomCounts[roomName] = {};
+          if (itemName) {
+            if (!counts[itemName]) {
+              counts[itemName] = {};
             }
-            courseNames.forEach((courseName: string) => {
-              roomCounts[roomName][courseName] =
-                (roomCounts[roomName][courseName] || 0) + 1;
-            });
+            counts[itemName][department] =
+              (counts[itemName][department] || 0) + 1;
           }
-        });
-      }
-
-      // Handle equipment
-      if (
-        userTransactions.equipments &&
-        typeof userTransactions.equipments === "object"
-      ) {
-        Object.values(userTransactions.equipments).forEach(
-          (equipmentBooking: any) => {
-            const equipmentName =
-              equipmentBooking.equipmentName || "Unknown Equipment";
-            const courseIdArray = Array.isArray(equipmentBooking.course)
-              ? equipmentBooking.course
-              : [];
-
-            // Resolve course names from IDs
-            const courseNames = courseIdArray.map((courseId: string) =>
-              getCourseName(courseId)
-            );
-
-            if (equipmentName) {
-              if (!equipmentCounts[equipmentName]) {
-                equipmentCounts[equipmentName] = {};
-              }
-              courseNames.forEach((courseName: string) => {
-                equipmentCounts[equipmentName][courseName] =
-                  (equipmentCounts[equipmentName][courseName] || 0) + 1;
-              });
-            }
-          }
-        );
-      }
-    }
-
-    // Combine data into chart-friendly format
-    const combinedData = [];
-
-    if (activeTab1 === "pendingRooms") {
-      for (const [roomName, courses] of Object.entries(roomCounts)) {
-        combinedData.push({
-          type: roomName,
-          ...courses, // Spread the course names and counts into the object
-        });
-      }
-    } else if (activeTab1 === "pendingEquipments") {
-      for (const [equipmentName, courses] of Object.entries(equipmentCounts)) {
-        combinedData.push({
-          type: equipmentName,
-          ...courses, // Spread the course names and counts into the object
         });
       }
     }
 
-    return combinedData;
+    // Flatten counts into an array format for the chart
+    const chartData = [];
+    for (const [itemName, departments] of Object.entries(counts)) {
+      for (const [department, count] of Object.entries(departments)) {
+        chartData.push({
+          name: `${itemName} - ${department}`,
+          value: count,
+        });
+      }
+    }
+
+    return chartData;
   };
 
+  // Generate unique color mapping for each department-course combination
   const generateCourseColors = (data: any) => {
-    const colors = new Map();
+    const colors = new Map<string, string>();
+
     data.forEach((entry: any) => {
-      Object.keys(entry).forEach((key) => {
-        if (key !== "type" && !colors.has(key)) {
-          colors.set(key, getRandomColor());
-        }
-      });
+      const { name } = entry; // Name format: "ItemName - Department - Course"
+      if (!colors.has(name)) {
+        // Assign a color from the array, looping back if necessary
+        colors.set(name, COLORS[colorIndex % COLORS.length]);
+        colorIndex++;
+      }
     });
+
+    console.log(colors);
     return colors;
+  };
+
+  const handleSearch = (bookings: any, term: any) => {
+    return bookings.filter((booking: any) => {
+      const bookingDetails = JSON.stringify(booking).toLowerCase();
+      return bookingDetails.includes(term.toLowerCase());
+    });
   };
 
   if (loading) {
@@ -959,7 +1044,9 @@ function Dashboard() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -1101,11 +1188,14 @@ function Dashboard() {
         </nav>
       </aside>
 
-      <main className="flex-1 p-6 bg-white overflow-auto max-h-screen">
+      <main
+        className="flex-1 p-6 bg-white overflow-auto max-h-screen"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }} // For Firefox and IE/Edge
+      >
         <header className="mb-6 flex flex-col md:flex-row justify-between items-center">
           <h1 className="text-2xl font-bold text-black">
             {" "}
-            SCC Learning Common Management System
+            SCC LEARNING COMMON MANAGEMENT SYSTEM
           </h1>
           <div className="flex items-center space-x-4 mt-4 md:mt-0">
             <div className="relative">
@@ -1143,57 +1233,102 @@ function Dashboard() {
         </header>
         <section
           className="overflow-y-auto"
-          style={{ maxHeight: "calc(100vh - 150px)" }}
+          style={{
+            maxHeight: "calc(100vh - 150px)",
+            scrollbarWidth: "none", // For Firefox
+            msOverflowStyle: "none", // For IE and Edge
+          }}
         >
-          {/*  Bar Chart  */}
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-black mb-4 text-center">
-              Transaction Chart
-            </h2>
-            <div className="mx-auto" style={{ width: "600px" }}>
-              <BarChart
-                width={600}
-                height={300}
-                data={chartData}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="type" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                {chartData.length > 0 &&
-                  Object.keys(chartData[0])
-                    .filter((key) => key !== "type")
-                    .map((courseName, index) => (
-                      <Bar
-                        key={index}
-                        dataKey={courseName}
-                        stackId="a"
-                        fill={courseColors.get(courseName) || "#CCCCCC"}
+          <div className="flex justify-center mb-6">
+            {/* Pie Chart for Rooms */}
+            <div className="w-1/2 mr-4">
+              <h2 className="text-xl font-bold text-black mb-4 text-center">
+                Rooms Chart
+              </h2>
+              <div className="mx-auto">
+                <PieChart width={600} height={400}>
+                  <Pie
+                    data={roomChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={150}
+                    label
+                    isAnimationActive={false} // Disables animation for a more stable render
+                  >
+                    {roomChartData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={roomColors.get(entry.name)} // Directly use the pre-defined color
                       />
                     ))}
-              </BarChart>
+                  </Pie>
+                  <Tooltip cursor={{ fill: "transparent" }} />{" "}
+                  {/* Avoids persistent hover */}
+                  <Legend />
+                </PieChart>
+              </div>
+            </div>
+
+            {/* Pie Chart for Equipments */}
+            <div className="w-1/2 ml-4">
+              <h2 className="text-xl font-bold text-black mb-4 text-center">
+                Equipments Chart
+              </h2>
+              <div className="mx-auto">
+                <PieChart width={600} height={400}>
+                  <Pie
+                    data={equipmentChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={150}
+                    label
+                  >
+                    {equipmentChartData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={equipmentColors.get(entry.name)} // Use predefined color directly
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip cursor={{ fill: "transparent" }} />{" "}
+                  {/* Avoids persistent hover */}
+                  <Legend />
+                </PieChart>
+              </div>
             </div>
           </div>
 
           {/* Tabs for switching between Pending Room and Equipment Bookings */}
           <div className="mb-4 text-black font-bold mt-6">
             <button
-              className={`py-2 px-4 mr-2 ${
+              className={`py-2 px-4 relative mr-2 ${
                 activeTab1 === "pendingRooms" ? "bg-gray-200" : "bg-white"
               } rounded border`}
               onClick={() => setActiveTab1("pendingRooms")}
             >
               Pending Room Bookings
+              {pendingBookings.length > 0 && (
+                <span className="absolute top-0 right-0 bg-red-600 text-white text-xs font-bold rounded-full px-1">
+                  {pendingBookings.length}
+                </span>
+              )}
             </button>
             <button
-              className={`py-2 px-4 ${
+              className={`py-2 px-4 relative ${
                 activeTab1 === "pendingEquipments" ? "bg-gray-200" : "bg-white"
               } rounded border`}
               onClick={() => setActiveTab1("pendingEquipments")}
             >
               Pending Equipment Borrowings
+              {equipmentBookings.length > 0 && (
+                <span className="absolute top-0 right-0 bg-red-600 text-white text-xs font-bold rounded-full px-1">
+                  {equipmentBookings.length}
+                </span>
+              )}
             </button>
           </div>
 
@@ -1286,27 +1421,29 @@ function Dashboard() {
                     </tr>
                   )
                 ) : equipmentBookings.length > 0 ? (
-                  equipmentBookings.map((booking) => {
+                  equipmentBookings.map((EquipmentBooking) => {
                     // Pending equipment bookings
-                    const nameDisplay = booking.equipmentName || "None";
-                    const equipmentDisplay = booking.equipmentName || "None";
+                    const nameDisplay =
+                      EquipmentBooking.equipmentName || "None";
+                    const equipmentDisplay =
+                      EquipmentBooking.equipmentDescriptions || "None";
 
                     return (
-                      <tr key={booking.id}>
+                      <tr key={EquipmentBooking.id}>
                         <td className="py-2 px-4 border-b text-left">
                           {nameDisplay}
                         </td>
                         <td className="py-2 px-4 border-b text-left">
-                          {booking.date}
+                          {EquipmentBooking.date}
                         </td>
                         <td className="py-2 px-4 border-b text-left">
-                          {convertTo12HourFormat(booking.startTime)}
+                          {convertTo12HourFormat(EquipmentBooking.startTime)}
                         </td>
                         <td className="py-2 px-4 border-b text-left">
-                          {convertTo12HourFormat(booking.endTime)}
+                          {convertTo12HourFormat(EquipmentBooking.endTime)}
                         </td>
                         <td className="py-2 px-4 border-b text-left">
-                          {booking.borrowedByName || "Unknown"}
+                          {EquipmentBooking.borrowedByName || "Unknown"}
                         </td>
                         <td className="py-2 px-4 border-b text-left">
                           {equipmentDisplay}
@@ -1315,7 +1452,7 @@ function Dashboard() {
                           <div className="flex justify-center space-x-2">
                             <button
                               onClick={() =>
-                                handleConfirm(booking.id, "equipment")
+                                handleConfirm(EquipmentBooking.id, "equipment")
                               }
                               className="btn bg-black text-white"
                             >
@@ -1324,9 +1461,9 @@ function Dashboard() {
                             <button
                               onClick={() =>
                                 confirmDelete(
-                                  booking.id,
+                                  EquipmentBooking.id,
                                   true,
-                                  booking.equipmentName
+                                  EquipmentBooking.equipmentName
                                 )
                               }
                               className="btn bg-red-600 text-white"
@@ -1381,7 +1518,9 @@ function Dashboard() {
               type="text"
               placeholder="Search..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+              }}
               className="w-full pl-3 pr-3 py-2 rounded bg-white text-black font-bold placeholder-gray-500 border border-black focus:border-black focus:outline-none"
               style={{ boxSizing: "border-box" }}
             />
@@ -1392,7 +1531,7 @@ function Dashboard() {
             <ul>
               {/* Conditional rendering based on active tab */}
               {activeTab === "rooms"
-                ? roomBookings.map((booking) => (
+                ? handleSearch(roomBookings, searchTerm).map((booking: any) => (
                     <li
                       key={booking.id}
                       className="mb-2 border-b pb-2 text-black"
@@ -1423,43 +1562,46 @@ function Dashboard() {
                       </div>
                     </li>
                   ))
-                : equipmentBookings2.map((booking) => (
-                    <li
-                      key={booking.id}
-                      className="mb-2 border-b pb-2 text-black"
-                    >
-                      <p>
-                        <strong>Equipment Name:</strong> {booking.equipmentName}
-                      </p>
-                      <p>
-                        <strong>Date:</strong> {booking.date}
-                      </p>
-                      <p>
-                        <strong>Start Time:</strong> {booking.startTime}
-                      </p>
-                      <p>
-                        <strong>End Time:</strong> {booking.endTime}
-                      </p>
-                      <p>
-                        <strong>Location:</strong>{" "}
-                        {booking.location || "Unknown"}
-                      </p>
-                      <p>
-                        <strong>Borrowed By:</strong>{" "}
-                        {booking.borrowedBy || "Unknown"}
-                      </p>
-                      <div className="flex space-x-2 mt-2">
-                        <button
-                          onClick={() =>
-                            openModal(booking.id, true, booking.equipmentName)
-                          } // For equipment booking
-                          className="btn btn-sm btn-success text-white mr-2"
-                        >
-                          Checkout
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                : handleSearch(equipmentBookings2, searchTerm).map(
+                    (booking: any) => (
+                      <li
+                        key={booking.id}
+                        className="mb-2 border-b pb-2 text-black"
+                      >
+                        <p>
+                          <strong>Equipment Name:</strong>{" "}
+                          {booking.equipmentName}
+                        </p>
+                        <p>
+                          <strong>Date:</strong> {booking.date}
+                        </p>
+                        <p>
+                          <strong>Start Time:</strong> {booking.startTime}
+                        </p>
+                        <p>
+                          <strong>End Time:</strong> {booking.endTime}
+                        </p>
+                        <p>
+                          <strong>Location:</strong>{" "}
+                          {booking.location || "Unknown"}
+                        </p>
+                        <p>
+                          <strong>Borrowed By:</strong>{" "}
+                          {booking.borrowedBy || "Unknown"}
+                        </p>
+                        <div className="flex space-x-2 mt-2">
+                          <button
+                            onClick={() =>
+                              openModal(booking.id, true, booking.equipmentName)
+                            } // For equipment booking
+                            className="btn btn-sm btn-success text-white mr-2"
+                          >
+                            Checkout
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  )}
             </ul>
           </div>
 

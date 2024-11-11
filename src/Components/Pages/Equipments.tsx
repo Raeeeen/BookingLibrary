@@ -66,6 +66,11 @@ function Equipments() {
   const [selectedEquipmentKey, setSelectedEquipmentKey] = useState<string>("");
   const [extraDescription, setExtraDescription] = useState<string | null>(null); // Store fetched extra description
   const [isShowingDescription, setIsShowingDescription] = useState(false); // Flag to track whether showing description modal is open
+  const [isModalOpen2, setIsModalOpen2] = useState(false);
+  const [sN, setSN] = useState<string | null>(null); // Store fetched extra description
+  const [isShowingSN, setIsShowingSN] = useState(false); // Flag to track whether showing description modal is open
+  const [newSN, setNewSN] = useState<string>("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     const equipmentsRef = dbRef(db, "equipments");
@@ -234,6 +239,74 @@ function Equipments() {
   // Calculate number of selected rows
   const selectedCount = selectedRows.size;
 
+  const addSNToEquipment = async (key: string, serialNumber: string) => {
+    try {
+      const equipmentRef = dbRef(getDatabase(), `equipments/${key}`);
+      await update(equipmentRef, { serialNumber });
+      toast.success("Serial Number added successfully!");
+    } catch (error) {
+      console.error("Error adding Serial Number: ", error);
+      toast.error("Failed to add Serial Number.");
+    }
+  };
+
+  // Open modal and set the selected equipment key
+  const openAddSNModal = (equipmentKey: string) => {
+    setSelectedEquipmentKey(equipmentKey);
+    setIsModalOpen2(true);
+  };
+
+  const handleAddSNSubmit = () => {
+    if (newSN.trim()) {
+      addSNToEquipment(selectedEquipmentKey, newSN);
+      setNewSN("");
+      setIsModalOpen2(false);
+    } else {
+      toast.error("Serial Number cannot be empty.");
+    }
+  };
+
+  const handleShowSN = async (equipmentKey: string) => {
+    try {
+      const equipmentRef = dbRef(db, `equipments/${equipmentKey}/serialNumber`);
+      const snapshot = await get(equipmentRef);
+      const sn = snapshot.val();
+      setSN(sn || "No serial number available");
+      setIsShowingSN(true); // Open modal for showing description
+    } catch (error) {
+      console.error("Error fetching extra description: ", error);
+      toast.error("Failed to fetch extra description.");
+    }
+  };
+
+  const handleSNClose = () => {
+    setIsShowingSN(false); // Close the modal
+    setSN(null); // Reset extra description
+  };
+
+  const handleSNCloseModal = () => {
+    setNewSN("");
+    setIsModalOpen2(false);
+  };
+
+  const handleClearSN = async () => {
+    if (selectedRows.size > 0) {
+      try {
+        for (const key of selectedRows) {
+          const equipmentRef = dbRef(db, `equipments/${key}`);
+          await update(equipmentRef, { serialNumber: null });
+        }
+        toast.success("Serial Number cleared successfully!");
+        handleDescriptionModalClose();
+      } catch (error) {
+        console.error("Error clearing Serial Number: ", error);
+        toast.error("Failed to clear Serial Number.");
+      }
+    } else {
+      toast.error("No equipment selected to clear Serial Number.");
+    }
+  };
+
   const addDescriptionToEquipment = async (
     key: string,
     extraDescription: string
@@ -335,6 +408,15 @@ function Equipments() {
     );
   }
 
+  const handleDropdownToggle = () => {
+    setDropdownOpen(!dropdownOpen);
+  };
+
+  const handleSelection = (key: any, isAvailable: any) => {
+    updateEquipments(key, isAvailable);
+    setDropdownOpen(false); // Close dropdown after clicking Yes or No
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
@@ -374,7 +456,9 @@ function Equipments() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -516,7 +600,7 @@ function Equipments() {
         </nav>
       </aside>
 
-      <main className="flex-1 p-6 bg-white overflow-auto max-h-screen">
+      <main className="flex-1 p-6 bg-white overflow-hidden max-h-screen">
         <div className="p-4">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-black">Equipments</h1>
@@ -525,7 +609,7 @@ function Equipments() {
             </button>
           </div>
 
-          <div className="overflow-x-auto text-black">
+          <div className="overflow-y-auto scrollbar-hide text-black max-h-[calc(100vh-200px)]">
             <table className="table w-full text-black">
               <thead>
                 <tr>
@@ -534,7 +618,7 @@ function Equipments() {
                       type="checkbox"
                       className="checkbox border-black"
                       onChange={handleSelectAll}
-                      checked={selectedRows.size === setEquipments.length}
+                      checked={selectedRows.size === equipments.length}
                     />
                   </th>
                   <th className="text-black">ID</th>
@@ -544,67 +628,126 @@ function Equipments() {
                 </tr>
               </thead>
               <tbody>
-                {equipments.map((equipments) => (
-                  <tr key={equipments.key}>
+                {equipments.map((equipment) => (
+                  <tr key={equipment.key}>
                     <th>
                       <input
                         type="checkbox"
                         className="checkbox border-black"
-                        checked={selectedRows.has(equipments.key)}
+                        checked={selectedRows.has(equipment.key)}
                         onChange={(e) =>
                           handleRowCheckboxChange(
-                            equipments.key,
+                            equipment.key,
                             e.target.checked
                           )
                         }
                       />
                     </th>
-                    <td>{equipments.id}</td>
-                    <td>{equipments.description}</td>
-                    <td>{equipments.isAvailable ? "Yes" : "No"}</td>
+                    <td>{equipment.id}</td>
+                    <td>{equipment.description}</td>
+                    <td className="flex items-center">
+                      {equipment.isAvailable ? "Yes" : "No"}
+
+                      {/* Dropdown Menu for Update/Delete */}
+                      <div
+                        className={`dropdown dropdown-left dropdown-end ml-2 ${
+                          dropdownOpen ? "open" : ""
+                        }`}
+                      >
+                        <label
+                          tabIndex={0}
+                          className="btn btn-sm bg-gray-200 ml-2 p-1 text-black"
+                          onClick={handleDropdownToggle}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </label>
+                        {dropdownOpen && (
+                          <ul
+                            tabIndex={0}
+                            className="dropdown-content menu p-2 shadow bg-gray-200 rounded-lg w-40 max-h-48 overflow-y-auto"
+                          >
+                            <li className="btn btn-sm text-white mb-2">
+                              <button
+                                onClick={() =>
+                                  handleSelection(equipment.key, false)
+                                }
+                              >
+                                Yes
+                              </button>
+                            </li>
+                            <li className="btn btn-sm bg-error text-white">
+                              <button
+                                onClick={() =>
+                                  handleSelection(equipment.key, true)
+                                }
+                              >
+                                No
+                              </button>
+                            </li>
+                          </ul>
+                        )}
+                      </div>
+                    </td>
                     <td>
-                      <button
-                        className="btn btn-sm text-white mr-2"
-                        onClick={() =>
-                          updateEquipments(
-                            equipments.key,
-                            equipments.isAvailable
-                          )
-                        }
-                      >
-                        Update
-                      </button>
-                      <button
-                        className="btn btn-sm btn-error text-white"
-                        onClick={() => deleteEquipmentAndFiles(equipments)}
-                      >
-                        Delete
-                      </button>
-                      <button
-                        className="btn btn-sm text-white ml-2"
-                        onClick={() => openAddDescriptionModal(equipments.key)}
-                      >
-                        Add Description
-                      </button>
-                      <button
-                        className="btn btn-sm  text-white ml-2"
-                        onClick={() => handleShowDescription(equipments.key)}
-                      >
-                        Show Description
-                      </button>
-                      <button
-                        className="btn btn-sm text-white ml-2"
-                        onClick={() => resetEquipmentUsedCount(equipments.key)}
-                      >
-                        Reset Used Count
-                      </button>
+                      <div className="flex flex-wrap gap-2 justify-start">
+                        <button
+                          className="btn btn-sm bg-error text-white"
+                          onClick={() => resetEquipmentUsedCount(equipment.key)}
+                        >
+                          Reset Used Count
+                        </button>
+                        <button
+                          className="btn btn-sm text-white"
+                          onClick={() => openAddDescriptionModal(equipment.key)}
+                        >
+                          Add Description
+                        </button>
+                        <button
+                          className="btn btn-sm text-white"
+                          onClick={() => handleShowDescription(equipment.key)}
+                        >
+                          Show Description
+                        </button>
+                        <button
+                          className="btn btn-sm text-white"
+                          onClick={() => openAddSNModal(equipment.key)}
+                        >
+                          Add Serial Number
+                        </button>
+                        <button
+                          className="btn btn-sm text-white"
+                          onClick={() => handleShowSN(equipment.key)}
+                        >
+                          Show Serial Number
+                        </button>
+                        <button
+                          className="btn btn-sm bg-error text-white"
+                          onClick={() => deleteEquipmentAndFiles(equipment)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="flex justify-between mt-4">
+
+          <div className="flex justify-between items-center mt-4">
             <span>
               {selectedCount} of {equipments.length} row(s) selected.
             </span>
@@ -645,13 +788,10 @@ function Equipments() {
       </Modal>
 
       {/* Modal for showing extra description */}
-      <Modal
-        isOpen={isShowingDescription}
-        onClose={handleDescriptionModalClose}
-      >
+      <Modal isOpen={isShowingDescription} onClose={handleCloseModal}>
         <div className="p-6">
           <h2 className="text-xl font-bold mb-4 text-black">
-            Equipment Description
+            Extra Description
           </h2>
           <p className="text-black">{extraDescription}</p>
           <div className="flex justify-end">
@@ -665,6 +805,52 @@ function Equipments() {
               className="btn text-white "
               onClick={handleDescriptionModalClose}
             >
+              Close
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal for adding Serial Number */}
+      <Modal isOpen={isModalOpen2} onClose={handleSNCloseModal}>
+        <div className="p-6">
+          <h2 className="text-xl font-bold mb-4 text-black">
+            Add Serial Number
+          </h2>
+          <input
+            type="text"
+            value={newSN}
+            onChange={(e) => setNewSN(e.target.value)}
+            placeholder="Enter Serial Number"
+            className="input input-bordered w-full mb-4"
+          />
+          <div className="flex justify-end">
+            <button className="btn text-white" onClick={handleAddSNSubmit}>
+              Add
+            </button>
+            <button
+              className="btn btn-error text-white font-bold ml-2"
+              onClick={handleSNCloseModal}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal for showing Serial Number */}
+      <Modal isOpen={isShowingSN} onClose={handleSNCloseModal}>
+        <div className="p-6">
+          <h2 className="text-xl font-bold mb-4 text-black">Serial Number</h2>
+          <p className="text-black">{sN}</p>
+          <div className="flex justify-end">
+            <button
+              className="btn btn-error text-white font-bold mr-2"
+              onClick={handleClearSN} // Use updated handler
+            >
+              Clear
+            </button>
+            <button className="btn text-white " onClick={handleSNClose}>
               Close
             </button>
           </div>

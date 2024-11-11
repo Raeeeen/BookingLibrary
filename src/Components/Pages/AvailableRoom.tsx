@@ -68,6 +68,7 @@ const AvailableRoom: React.FC = () => {
   const [currentRoomTitle, setCurrentRoomTitle] = useState("");
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Firebase configuration
   const firebaseConfig = {
@@ -179,7 +180,6 @@ const AvailableRoom: React.FC = () => {
     return !excludedRooms.includes(roomTitle);
   };
 
-  // Update the RoomCard component to use the defined types
   const RoomCard: React.FC<RoomCardProps> = ({
     title,
     image,
@@ -206,8 +206,8 @@ const AvailableRoom: React.FC = () => {
           </p>
         )}
 
-        {/* Conditionally render roomUsed */}
-        {roomUsed && roomUsed !== "0" && (
+        {/* Always display roomUsed, even if it's 0 */}
+        {roomUsed !== undefined && (
           <p className="text-gray-600 mb-2">
             Room Used:{" "}
             <span className="font-semibold text-blue-600">{roomUsed}</span>
@@ -238,6 +238,16 @@ const AvailableRoom: React.FC = () => {
   const filteredRooms = rooms.filter((room) =>
     filter === "Available" ? room.available : !room.available
   );
+
+  // Filter `filteredEquipments` by the search term and availability
+  const searchFilteredRooms = filteredRooms.filter((room) => {
+    const matchesSearch = room.title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesAvailability =
+      filter === "Available" ? room.available : !room.available;
+    return matchesSearch && matchesAvailability;
+  });
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -278,7 +288,9 @@ const AvailableRoom: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -424,6 +436,13 @@ const AvailableRoom: React.FC = () => {
         <div className="container mx-auto p-4">
           <h1 className="text-2xl font-bold mb-4 text-black">Rooms</h1>
           <div className="mb-4 flex space-x-4">
+            <input
+              type="text"
+              placeholder="Search Rooms..."
+              className="input input-bordered w-full max-w-xs"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
             <button
               className={`btn ${
                 filter === "Available" ? "btn-accent text-white" : ""
@@ -442,7 +461,7 @@ const AvailableRoom: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {filteredRooms.map((room, index) => (
+            {searchFilteredRooms.map((room, index) => (
               <RoomCard
                 key={index}
                 title={room.title}

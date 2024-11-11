@@ -20,6 +20,7 @@ function AddCourses() {
   const [description, setDescription] = useState<string>("");
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(true);
+  const [department, setDepartment] = useState<string>("");
 
   const firebaseConfig = {
     apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
@@ -40,17 +41,22 @@ function AddCourses() {
     try {
       let availability = true;
 
-      // Add course details to Realtime Database
-      const coursesRef = dbRef(db, "courses");
+      // Reference to the department-specific node in the database
+      const coursesRef = dbRef(db, `courses/${department}`);
       const newcoursesRef = push(coursesRef);
+
+      // Add course details to the department-specific node
       await set(newcoursesRef, {
         description,
         availability,
+        department,
       });
 
-      // Reset form
+      // Reset form and show success message
       setDescription("");
-      toast.success("Course added successful!");
+      toast.success("Course added successfully!");
+
+      // Redirect after success
       setTimeout(() => {
         navigate("/Courses");
       }, 2000);
@@ -99,7 +105,9 @@ function AddCourses() {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -255,6 +263,30 @@ function AddCourses() {
                 </label>
                 <p className="text-gray-500">Provide course information</p>
               </div>
+
+              {/* Department Selector */}
+              <div className="mb-4">
+                <label
+                  htmlFor="department"
+                  className="block text-black text-sm font-bold mb-2"
+                >
+                  Department:
+                </label>
+                <select
+                  id="department"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                >
+                  <option value="">Select a department</option>
+                  <option value="CCS">CCS</option>
+                  <option value="CTEAS">CTEAS</option>
+                  <option value="CBE">CBE</option>
+                  <option value="COC">COC</option>
+                </select>
+              </div>
+
+              {/* Description Field */}
               <div>
                 <label
                   className="block text-sm font-bold text-black"
@@ -272,6 +304,7 @@ function AddCourses() {
                 />
               </div>
 
+              {/* Submit Button */}
               <div>
                 <button
                   type="submit"
@@ -284,6 +317,7 @@ function AddCourses() {
           </div>
         </div>
       </main>
+
       <ToastContainer />
     </div>
   );

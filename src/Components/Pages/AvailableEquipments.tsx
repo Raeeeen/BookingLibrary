@@ -68,6 +68,7 @@ const AvailableEquipments: React.FC = () => {
   const [currentEquipmentTitle, setCurrentEquipmentTitle] = useState("");
   const navigate = useNavigate();
   const [showAddOptions, setShowAddOptions] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Firebase configuration
   const firebaseConfig = {
@@ -205,8 +206,8 @@ const AvailableEquipments: React.FC = () => {
           </p>
         )}
 
-        {/* Conditionally render equipmentUsed */}
-        {equipmentUsed && equipmentUsed !== "0" && (
+        {/* Always display equipmentUsed, even if it's 0 */}
+        {equipmentUsed !== undefined && (
           <p className="text-gray-600 mb-2">
             Equipment Used:{" "}
             <span className="font-semibold text-blue-600">{equipmentUsed}</span>
@@ -234,6 +235,16 @@ const AvailableEquipments: React.FC = () => {
   const filteredEquipments = equipments.filter((equipments) =>
     filter === "Available" ? equipments.available : !equipments.available
   );
+
+  // Filter `filteredEquipments` by the search term and availability
+  const searchFilteredEquipments = filteredEquipments.filter((equipment) => {
+    const matchesSearch = equipment.title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesAvailability =
+      filter === "Available" ? equipment.available : !equipment.available;
+    return matchesSearch && matchesAvailability;
+  });
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -274,7 +285,9 @@ const AvailableEquipments: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Book/Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
 
@@ -419,7 +432,16 @@ const AvailableEquipments: React.FC = () => {
       <main className="flex-1 p-6 bg-white h-screen overflow-y-auto">
         <div className="container mx-auto p-4">
           <h1 className="text-2xl font-bold mb-4 text-black">Equipments</h1>
-          <div className="mb-4 flex space-x-4">
+
+          {/* Search Bar */}
+          <div className="mb-4 flex items-center space-x-4">
+            <input
+              type="text"
+              placeholder="Search Equipments..."
+              className="input input-bordered w-full max-w-xs"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
             <button
               className={`btn ${
                 filter === "Available" ? "btn-accent text-white" : ""
@@ -437,8 +459,10 @@ const AvailableEquipments: React.FC = () => {
               Not Available
             </button>
           </div>
+
+          {/* Filtered Equipments Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {filteredEquipments.map((equipment, index) => (
+            {searchFilteredEquipments.map((equipment, index) => (
               <EquipmentsCard
                 key={index}
                 title={equipment.title}

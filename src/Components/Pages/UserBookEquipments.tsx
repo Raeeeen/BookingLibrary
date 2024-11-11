@@ -6,7 +6,6 @@ import {
   set,
   Database,
   get,
-  onValue,
 } from "firebase/database";
 import schoolLogo from "../../assets/scclogo.png";
 import dashboardlogo from "../../assets/dashboardlogo.png";
@@ -20,12 +19,22 @@ import "react-toastify/dist/ReactToastify.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import UserSelection from "./BorrowedUserSelection";
-import CourseSelection from "./CourseSelection";
-import { getAuth } from "firebase/auth";
+import { getAuth, User } from "firebase/auth";
 import EquipmentSelection from "./EquipmentSelection";
+import Lottie from "lottie-react";
+import loadingAnimation from "../../assets/loadinganimation2.json";
 
 const generateRandomRoomId = () => {
   return Math.floor(Math.random() * 10000) + 1; // Random number between 1 and 10000
+};
+
+// Define the booking type based on your structure
+type Booking = {
+  date: string; // Assuming date is a string in YYYY-MM-DD format
+  startTime: string; // Assuming startTime is in HH:mm format
+  endTime: string; // Assuming endTime is in HH:mm format
+  equipmentName?: string; // Optional, if applicable
+  equipments?: string[]; // Add equipments as an array of IDs
 };
 
 const UserBookEquipments: React.FC = () => {
@@ -37,7 +46,9 @@ const UserBookEquipments: React.FC = () => {
 
   const [, setStudentName] = useState<string>("");
   const [equipmentId] = useState(generateRandomRoomId());
-  const [, setBookedSlots] = useState<{ start: Date; end: Date }[]>([]);
+  const [bookedSlots, setBookedSlots] = useState<{ start: Date; end: Date }[]>(
+    []
+  );
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [purpose, setPurpose] = useState<string>("");
   const [locationField, setlocation] = useState<string>("");
@@ -65,12 +76,15 @@ const UserBookEquipments: React.FC = () => {
     { id: string; name: string; description: string }[]
   >([]); // New state
   const [courses, setCourses] = useState<
-    { id: string; name: string; description: string }[]
-  >([]); // New state
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [showCourseSelection, setShowCourseSelection] = useState(false);
+    { id: string; name: string; description: string; department: string }[]
+  >([]);
   const handleDateChange = (date: any) => setDate(date);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [selectedCourse, setSelectedCourse] = useState<string>(""); // For current selection
+  const departments = ["CCS", "COC", "CTEAS", "CBE"];
+  const [filteredCourses, setFilteredCourses] = useState<any[]>([]); // Store filtered courses based on department
 
   // Firebase configuration
   const firebaseConfig = {
@@ -89,13 +103,19 @@ const UserBookEquipments: React.FC = () => {
   const auth = getAuth(app);
 
   useEffect(() => {
-    // Fetch the current logged-in user ID
-    const user = auth.currentUser;
-    if (user) {
-      setCurrentUserId(user.uid);
-      setSelectedUsers([user.uid]); // Set the current user as the selected user
-    }
-  }, [auth]);
+    const unsubscribe = auth.onAuthStateChanged((authUser) => {
+      if (authUser) {
+        setUser(authUser); // Save the authenticated user to the state
+        setSelectedUsers([authUser.uid]); // Set the current user as the selected user
+        setCurrentUserId(authUser.uid);
+      } else {
+        setUser(null); // Clear user state if no one is logged in
+      }
+      setLoading(false); // Stop loading once the user state is set
+    });
+
+    return () => unsubscribe(); // Clean up the listener
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -149,27 +169,53 @@ const UserBookEquipments: React.FC = () => {
       const coursesRef = dbRef(db, "courses");
       const snapshot = await get(coursesRef);
       const data = snapshot.val();
+
       const fetchCourses: {
         id: string;
         name: string;
         description: string;
+        department: string;
       }[] = [];
 
-      for (const key in data) {
-        if (data[key].availability === true) {
-          fetchCourses.push({
-            id: key,
-            name: data[key].name,
-            description: data[key].description || "",
-          });
+      // Loop through departments and courses
+      for (const dept in data) {
+        if (departments.includes(dept)) {
+          const departmentCourses = data[dept];
+
+          // Loop through courses in the department
+          for (const key in departmentCourses) {
+            const course = departmentCourses[key];
+
+            // Only push courses that are available
+            if (course.availability === true) {
+              fetchCourses.push({
+                id: key,
+                name: course.name || "", // Add name if available in the data
+                description: course.description || "",
+                department: dept,
+              });
+            }
+          }
         }
       }
 
-      setCourses(fetchCourses);
+      setCourses(fetchCourses); // Store all fetched courses
     };
 
     fetchCourses();
-  }, [db]);
+  }, []);
+
+  // Filter courses when department changes
+  useEffect(() => {
+    if (department) {
+      const filtered = courses.filter(
+        (course) => course.department === department
+      );
+      setFilteredCourses(filtered); // Set filtered courses
+    } else {
+      setFilteredCourses(courses); // Show all courses if no department is selected
+    }
+  }, [department, courses]);
 
   useEffect(() => {
     // Fetch booked slots
@@ -196,12 +242,13 @@ const UserBookEquipments: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    // Validation checks
     if (!date) {
       toast.error("Please select a date.");
       return;
     }
 
-    if (selectedCourses.length === 0) {
+    if (selectedCourse.length === 0) {
       toast.error("Please select at least one Course.");
       return;
     }
@@ -221,11 +268,6 @@ const UserBookEquipments: React.FC = () => {
       return;
     }
 
-    if (!date) {
-      toast.error("Please select a date.");
-      return;
-    }
-
     if (!contact) {
       toast.error("Please enter the phone number.");
       return;
@@ -233,15 +275,6 @@ const UserBookEquipments: React.FC = () => {
 
     if (!locationField) {
       toast.error("Please enter a location.");
-      return;
-    }
-
-    // Ensure no undefined values in selectedCourses
-    const validCourses = selectedCourses.filter(
-      (course) => course !== undefined && course !== null
-    );
-    if (validCourses.length === 0) {
-      toast.error("One or more courses are invalid.");
       return;
     }
 
@@ -262,8 +295,6 @@ const UserBookEquipments: React.FC = () => {
 
     // Convert local time to UTC+8 before saving
     const localDate = new Date(date);
-
-    // Convert start time to 24-hour format
     const { hours: startHours24, minutes: startMinutes24 } =
       convertTo24HourFormat(
         parseInt(startTime.hours),
@@ -277,8 +308,6 @@ const UserBookEquipments: React.FC = () => {
       startHours24,
       startMinutes24
     );
-
-    // Convert end time to 24-hour format
     const { hours: endHours24, minutes: endMinutes24 } = convertTo24HourFormat(
       parseInt(endTime.hours),
       parseInt(endTime.minutes),
@@ -313,6 +342,158 @@ const UserBookEquipments: React.FC = () => {
     // Format the date as YYYY-MM-DD
     const formattedDate = startTimeDateUTC8.toISOString().split("T")[0];
 
+    // Check if the new booking overlaps with any existing bookings
+    const isOverlapping = bookedSlots.some((slot) => {
+      const slotStart = new Date(
+        new Date(slot.start).getTime() -
+          new Date(slot.start).getTimezoneOffset() * 60000 +
+          8 * 3600000
+      ); // Adjust slot.start to UTC+8
+      const slotEnd = new Date(
+        new Date(slot.end).getTime() -
+          new Date(slot.end).getTimezoneOffset() * 60000 +
+          8 * 3600000
+      ); // Adjust slot.end to UTC+8
+
+      // Overlapping condition: Start time before existing end time AND end time after existing start time
+      return (
+        slotStart.toDateString() === startTimeDateUTC8.toDateString() &&
+        startTimeDateUTC8 < slotEnd &&
+        endTimeDateUTC8 > slotStart
+      );
+    });
+
+    if (isOverlapping) {
+      toast.error("The selected time slot overlaps with an existing booking.");
+      return;
+    }
+    // Retrieve bookings for the selected equipment from both bookequipments and pendingEquipmentBookings
+    const existingBookingsRef1 = dbRef(db, "bookequipments");
+    const pendingBookingsRef1 = dbRef(db, "pendingEquipmentBookings");
+
+    const [existingBookingsSnapshot1, pendingBookingsSnapshot1] =
+      await Promise.all([get(existingBookingsRef1), get(pendingBookingsRef1)]);
+
+    const existingBookings1 = existingBookingsSnapshot1.val();
+    const pendingBookings1 = pendingBookingsSnapshot1.val();
+
+    // Combine bookings from bookequipments and pendingEquipmentBookings
+    const allEquipmentBookings = [
+      ...(existingBookings1 ? Object.values(existingBookings1) : []),
+      ...(pendingBookings1 ? Object.values(pendingBookings1) : []),
+    ];
+
+    // Filter to get only bookings for the selected equipmentTitle
+    const filteredEquipmentBookings = allEquipmentBookings.filter(
+      (booking: any) => booking.equipmentName === equipmentTitle
+    );
+
+    // Check for time slot overlap
+    const isTimeSlotTaken = filteredEquipmentBookings.some((booking: any) => {
+      const bookingDateUTC8 = new Date(
+        new Date(booking.date).getTime() -
+          new Date(booking.date).getTimezoneOffset() * 60000 +
+          8 * 3600000
+      )
+        .toISOString()
+        .split("T")[0];
+
+      return (
+        bookingDateUTC8 === startTimeDateUTC8.toISOString().split("T")[0] &&
+        booking.startTime ===
+          `${startHours24.toString().padStart(2, "0")}:${startMinutes24
+            .toString()
+            .padStart(2, "0")}` &&
+        booking.endTime ===
+          `${endHours24.toString().padStart(2, "0")}:${endMinutes24
+            .toString()
+            .padStart(2, "0")}`
+      );
+    });
+
+    if (isTimeSlotTaken) {
+      toast.error(
+        "This time slot is already booked for the selected equipment."
+      );
+      return;
+    }
+
+    // Fetch bookings data from Firebase
+    const existingBookingsRef = dbRef(db, "bookequipments");
+    const pendingBookingsRef = dbRef(db, "pendingEquipmentBookings");
+    const equipmentsRef = dbRef(db, "equipments");
+    const pendingRoomBookingsRef = dbRef(db, "pendingRoomBookings");
+
+    const [
+      existingBookingsSnapshot,
+      pendingBookingsSnapshot,
+      equipmentsSnapshot,
+      pendingRoomBookingsSnapshot,
+    ] = await Promise.all([
+      get(existingBookingsRef),
+      get(pendingBookingsRef),
+      get(equipmentsRef),
+      get(pendingRoomBookingsRef),
+    ]);
+
+    const existingBookings: Record<string, Booking> =
+      existingBookingsSnapshot.val() || {};
+    const pendingBookings: Record<string, Booking> =
+      pendingBookingsSnapshot.val() || {};
+    const equipmentsData: Record<string, { description: string }> =
+      equipmentsSnapshot.val() || {};
+    const pendingRoomBookings: Record<string, Booking> =
+      pendingRoomBookingsSnapshot.val() || {};
+
+    // Combine bookings for overlap check
+    const allBookings: Booking[] = [
+      ...Object.values(existingBookings),
+      ...Object.values(pendingBookings),
+      ...Object.values(pendingRoomBookings),
+    ];
+
+    // Loop over selectedEquipments to check for overlapping bookings
+    const hasOverlap = selectedEquipments.some((equipmentId) => {
+      const equipmentName = equipmentsData[equipmentId]?.description;
+      if (!equipmentName) return false;
+
+      const equipmentOverlap = allBookings.some((booking) => {
+        const bookingDateUTC8 = new Date(
+          new Date(booking.date).getTime() -
+            new Date(booking.date).getTimezoneOffset() * 60000 +
+            8 * 3600000
+        )
+          .toISOString()
+          .split("T")[0];
+
+        const bookingStartTime = new Date(
+          `${booking.date}T${booking.startTime}:00Z`
+        );
+        const bookingEndTime = new Date(
+          `${booking.date}T${booking.endTime}:00Z`
+        );
+        const startUTC8 = new Date(bookingStartTime.getTime() + 8 * 3600000);
+        const endUTC8 = new Date(bookingEndTime.getTime() + 8 * 3600000);
+
+        return (
+          bookingDateUTC8 === formattedDate &&
+          startTimeDateUTC8 < endUTC8 &&
+          endTimeDateUTC8 > startUTC8 &&
+          (booking.equipments?.includes(equipmentId) ||
+            booking.equipmentName === equipmentName) // Check by equipmentName here
+        );
+      });
+
+      return equipmentOverlap;
+    });
+
+    if (hasOverlap) {
+      toast.error(
+        "One or more selected equipments are already booked during this time."
+      );
+      return;
+    }
+
     // Booking details
     const bookingData = {
       equipmentName: equipmentTitle,
@@ -330,26 +511,22 @@ const UserBookEquipments: React.FC = () => {
       location: locationField,
       contact: contact,
       department: department,
-      course: validCourses,
+      course: Array.isArray(selectedCourse) ? selectedCourse : [selectedCourse],
       equipments: selectedEquipments,
       subject: subject,
     };
 
-    // Reference to the bookrooms node
+    // Save the booking to pendingEquipmentBookings
     const bookingRef = dbRef(db, `pendingEquipmentBookings/${equipmentId}`);
 
     try {
-      // Save booking data to Firebase
       await set(bookingRef, bookingData);
-
-      changeAvailabilityToFalse(equipmentTitle);
-
       toast.success("Waiting for the Admin confirmation!");
       setTimeout(() => {
         navigate("/UserDashboard");
       }, 2000);
 
-      // Clear form fields after successful submission
+      // Clear form fields
       setDate(null);
       setStudents([]);
       setStudentName("");
@@ -365,57 +542,6 @@ const UserBookEquipments: React.FC = () => {
       toast.error(
         "An error occurred while booking the equipment. Please try again."
       );
-    }
-  };
-
-  // Function to get the equipment key by matching description
-  const getEquipmentKeyByDescription = async (
-    db: Database,
-    description: string
-  ): Promise<string | null> => {
-    return new Promise((resolve) => {
-      const equipmentsRef = dbRef(db, "equipments");
-
-      onValue(equipmentsRef, (snapshot) => {
-        const data = snapshot.val();
-        let foundKey: string | null = null;
-
-        for (const key in data) {
-          const equipment = data[key];
-          if (equipment.description === description) {
-            foundKey = key;
-            break;
-          }
-        }
-
-        if (foundKey) {
-          resolve(foundKey);
-        } else {
-          resolve(null);
-        }
-      });
-    });
-  };
-
-  // Usage of the function to change availability
-  const changeAvailabilityToFalse = async (description: string) => {
-    const db = getDatabase();
-
-    try {
-      const equipmentKey = await getEquipmentKeyByDescription(db, description);
-
-      if (equipmentKey) {
-        const availabilityRef = dbRef(
-          db,
-          `equipments/${equipmentKey}/availability`
-        );
-        await set(availabilityRef, false);
-        console.log(`Availability for "${description}" has been set to false.`);
-      } else {
-        console.log(`Equipment with description "${description}" not found.`);
-      }
-    } catch (error) {
-      console.error("Error updating availability:", error);
     }
   };
 
@@ -459,17 +585,21 @@ const UserBookEquipments: React.FC = () => {
     setShowEquipmentsSelection(false);
   };
 
-  const handleSelectCourses = (selected: string[]) => {
-    setSelectedCourses(selected);
-    setShowCourseSelection(false);
-  };
-
   // Calculate the minimum date for booking (3 days from today)
   const minBookingDate = new Date();
   minBookingDate.setDate(minBookingDate.getDate() + 3);
 
   const openEquipmentsModal = () => setShowEquipmentsSelection(true);
-  const openCourseModal = () => setShowCourseSelection(true);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-16 h-16">
+          <Lottie animationData={loadingAnimation} loop={true} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row text-white">
@@ -498,7 +628,9 @@ const UserBookEquipments: React.FC = () => {
                 className="flex items-center p-2 hover:bg-green-600 rounded-md"
               >
                 <img src={borrowLogo} alt="Borrow" className="h-6 w-6" />
-                <span className="ml-2 text-white font-bold">Book/Borrow</span>
+                <span className="ml-2 text-white font-bold">
+                  Booking/Borrowing
+                </span>
               </a>
             </li>
             <li className="mb-4">
@@ -570,10 +702,10 @@ const UserBookEquipments: React.FC = () => {
                       type="text"
                       value={equipmentId}
                       readOnly
-                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
+                      className="shadow appearance-none border bg-gray-200 rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     />
                   </div>
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="department"
                       className="block text-black text-sm font-bold mb-2"
@@ -587,41 +719,34 @@ const UserBookEquipments: React.FC = () => {
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
                       <option value="">Select a department</option>
-                      <option value="CCS">CCS</option>
-                      <option value="CTEAS">CTEAS</option>
-                      <option value="CBE">CBE</option>
-                      <option value="COC">COC</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
+
                   <div>
                     <label
                       htmlFor="course"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
-                      Course:
+                      Program:
                     </label>
-                    <button
-                      type="button"
-                      onClick={openCourseModal}
-                      className="p-2 bg-black text-white rounded"
+                    <select
+                      id="course"
+                      value={selectedCourse} // This should hold the ID of the selected course
+                      onChange={(e) => setSelectedCourse(e.target.value)} // Update the selected course ID
+                      className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
                     >
-                      Select Course
-                    </button>
-                    {selectedCourses.length > 0 && (
-                      <ul className="mt-3">
-                        {selectedCourses.map((coursesId, index) => {
-                          return (
-                            <li
-                              key={index}
-                              className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                            >
-                              {courses.find((u) => u.id === coursesId)
-                                ?.description || coursesId}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                      <option value="">Select a Program</option>
+                      {filteredCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label
@@ -641,20 +766,28 @@ const UserBookEquipments: React.FC = () => {
                 </div>
                 <div className="w-full md:w-1/2 pl-2">
                   {/* Right side */}
-                  <div>
+                  <div className="mb-4">
                     <label
                       htmlFor="purpose"
                       className="block text-black text-sm font-bold mb-2 mt-2"
                     >
                       Purpose:
                     </label>
-                    <input
-                      type="text"
+                    <select
                       id="purpose"
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline"
-                    />
+                    >
+                      <option value="">Select Purpose</option>
+                      <option value="Meetings">Meetings</option>
+                      <option value="Discussions">Discussions</option>
+                      <option value="Workshops">Workshops</option>
+                      <option value="Presentations">Presentations</option>
+                      <option value="Training">Training</option>
+                      <option value="Reporting">Reporting</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
 
                   <div>
@@ -714,11 +847,10 @@ const UserBookEquipments: React.FC = () => {
                     >
                       Borrowed By:
                     </label>
-                    {auth.currentUser ? (
+                    {user ? (
                       <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
-                        {auth.currentUser.displayName ||
-                          auth.currentUser.email ||
-                          auth.currentUser.uid}
+                        {user.displayName || user.email || user.uid}
+                        {/* Display user's name, email, or UID */}
                       </div>
                     ) : (
                       <div className="shadow appearance-none border bg-white rounded w-full py-2 px-3 text-black leading-tight focus:outline-none focus:shadow-outline">
@@ -726,6 +858,7 @@ const UserBookEquipments: React.FC = () => {
                       </div>
                     )}
                   </div>
+
                   <div className="mb-4">
                     <label
                       className="block text-black text-sm font-bold mb-2 mt-2"
@@ -902,20 +1035,12 @@ const UserBookEquipments: React.FC = () => {
       {showEquipmentsSelection && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <EquipmentSelection
-            equipments={equipments}
+            equipments={equipments.filter(
+              (equipment) => equipment.description !== equipmentTitle
+            )} // Filter out equipments with the same description as equipmentTitle
             selectedEquipments={selectedEquipments}
             onSelect={handleSelectEquipments}
             onCancel={() => setShowEquipmentsSelection(false)}
-          />
-        </div>
-      )}
-      {showCourseSelection && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <CourseSelection
-            courses={courses}
-            selectedCourses={selectedCourses}
-            onSelect={handleSelectCourses}
-            onCancel={() => setShowCourseSelection(false)}
           />
         </div>
       )}
