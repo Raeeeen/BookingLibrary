@@ -34,13 +34,7 @@ function UserTransactionHistory() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const firebaseConfig = {
-    apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
-    authDomain: "library-7feb9.firebaseapp.com",
-    databaseURL: "https://library-7feb9-default-rtdb.firebaseio.com",
-    projectId: "library-7feb9",
-    storageBucket: "library-7feb9.appspot.com",
-    messagingSenderId: "977659880455",
-    appId: "1:977659880455:web:f1c2a95baaace7f2caf6a2",
+
   };
 
   const app = initializeApp(firebaseConfig);
