@@ -23,13 +23,7 @@ function AddCourses() {
   const [department, setDepartment] = useState<string>("");
 
   const firebaseConfig = {
-    apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
-    authDomain: "library-7feb9.firebaseapp.com",
-    databaseURL: "https://library-7feb9-default-rtdb.firebaseio.com",
-    projectId: "library-7feb9",
-    storageBucket: "library-7feb9.appspot.com",
-    messagingSenderId: "977659880455",
-    appId: "1:977659880455:web:f1c2a95baaace7f2caf6a2",
+
   };
 
   // Initialize Firebase
@@ -56,7 +50,6 @@ function AddCourses() {
       setDescription("");
       toast.success("Course added successfully!");
 
-      // Redirect after success
       setTimeout(() => {
         navigate("/Courses");
       }, 2000);
@@ -69,7 +62,6 @@ function AddCourses() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-green-800 p-4 h-screen overflow-y-auto scrollbar-hide">
-        {/* Set height for the sidebar */}
         <style>
           {`
       .scrollbar-hide {
@@ -84,7 +76,7 @@ function AddCourses() {
           <img
             src={schoolLogo}
             alt="Logo"
-            className="h-24 w-24 md:h-40 md:w-32 rounded-full" // Adjusted size for the logo
+            className="h-24 w-24 md:h-40 md:w-32 rounded-full" 
           />
         </div>
         <nav className="h-full">
