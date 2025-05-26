@@ -15,20 +15,14 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import Lottie from "lottie-react";
-import loadingAnimation from "../assets/loadinganimation2.json"; // Path to your Lottie JSON file
+import loadingAnimation from "../assets/loadinganimation2.json"; 
 
 function SignIn() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const firebaseConfig = {
-    apiKey: "AIzaSyCHdD3lqfVXCO00zQcaWpZFpAqKfIIVnk8",
-    authDomain: "library-7feb9.firebaseapp.com",
-    databaseURL: "https://library-7feb9-default-rtdb.firebaseio.com",
-    projectId: "library-7feb9",
-    storageBucket: "library-7feb9.appspot.com",
-    messagingSenderId: "977659880455",
-    appId: "1:977659880455:web:f1c2a95baaace7f2caf6a2",
+    
   };
 
   // Initialize Firebase
@@ -46,22 +40,21 @@ function SignIn() {
 
       const userName = user.displayName || "Unknown";
       const userId = user.uid;
-      const userPhotoURL = user.photoURL || ""; // Get profile picture URL
+      const userPhotoURL = user.photoURL || ""; 
 
       // Get the current date and time
       const currentDate = new Date();
-      const currentTime = currentDate.toLocaleTimeString(); // You can customize the format
+      const currentTime = currentDate.toLocaleTimeString();
       // Format current date as day/mm/year
-      const currentDateString = currentDate.toLocaleDateString("en-GB"); // Change to "en-GB" for day/mm/year
+      const currentDateString = currentDate.toLocaleDateString("en-GB"); 
 
-      // Set loading to true before starting async tasks
       setLoading(true);
 
-      // Prepare user data object
+
       const userData = {
         name: userName,
         email: user.email,
-        photoURL: "", // Default in case there is no photo
+        photoURL: "", 
       };
 
       // Handle the profile picture upload if it exists
@@ -69,14 +62,12 @@ function SignIn() {
         const response = await fetch(userPhotoURL);
         const blob = await response.blob();
 
-        // Create a reference to store the profile picture
         const profilePicRef = storageRef(
           storage,
           `users/${userId}/profile.jpg`
         );
         await uploadBytes(profilePicRef, blob);
 
-        // Get the download URL of the uploaded image
         userData.photoURL = await getDownloadURL(profilePicRef);
       }
 
@@ -92,7 +83,7 @@ function SignIn() {
         await set(ref(db, `users/${userId}/currentTime`), currentTime);
         await set(ref(db, `users/${userId}/currentDate`), currentDateString);
 
-        // Generate a random ID (e.g., between 1000 and 9999)
+
         const randomId = Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
 
         // Add to login history under the specific random ID
@@ -109,7 +100,6 @@ function SignIn() {
 
       toast.success("Login with Gsuite successful!");
 
-      // Simulate a delay to show the loading animation
       setTimeout(() => {
         setLoading(false);
         if (
@@ -120,11 +110,11 @@ function SignIn() {
         } else {
           navigate("/UserDashboard");
         }
-      }, 2000); // Adjust the timeout as needed
+      }, 2000); 
     } catch (error: any) {
       console.error("Error signing in with Gsuite:", error.message);
       toast.error("Error signing in with Gsuite. Please try again.");
-      setLoading(false); // Ensure loading is stopped on error
+      setLoading(false); 
     }
   };
 
